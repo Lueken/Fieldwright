@@ -9,7 +9,7 @@ using Vintagestory.API.Util;
 [assembly: ModInfo("Fieldwright", "fieldwright",
     Authors = new string[] { "Venah" },
     Description = "A surveyor's pocket aid for builders. Client-side personal blueprint mod with anchor-snap paste.",
-    Version = "0.1.0")]
+    Version = "0.1.0-dev")]
 
 namespace Fieldwright;
 

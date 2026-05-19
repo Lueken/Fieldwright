@@ -4,6 +4,9 @@ obj/
 *.user
 *.suo
 
+# Release artifacts — attached to GitHub Releases, not committed
+Fieldwright-v*.zip
+
 # IDE
 .vs/
 .vscode/
