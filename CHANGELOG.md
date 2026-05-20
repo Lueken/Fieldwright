@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. Format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.1] — 2026-05-20
+
+The "polish + power-user" release. Adds the schematic library UI, three matching modes, a 3-axis mirror, layer-by-layer view, in-world red highlights for blocks that need to be cleared, plus a mod config file with user-tunable knobs.
+
+### Added
+- **Mod config file** at `%APPDATA%/VintagestoryData/ModConfig/Fieldwright.json`. Auto-created with defaults on first load. Knobs: `DefaultMatchingMode`, `GhostAlpha`, `RenderDistanceBlocks`, `AutoDismissMs`, `HudOffsetX`, `HudOffsetY`.
+- **MatchingMode toggle (Loose / Medium / Strict)**. Loose stays the default (any cobble counts as any cobble), matching v0.1.0 behavior. Medium uses VS's Variant API to strip orientation variants only (rotation, facing, side) while preserving rock type / wood type / condition. Strict requires the exact block code including every variant. Per-paste override via `.fw paste my-house medium`. The library UI dropdown saves the chosen default back to disk.
+- **Schematic library UI** (`Ctrl+Shift+K` or `.fw library`). Native GuiDialog listing saved blueprints with size, block count, anchor face, modified date, and "has backup" badge. Per-row Paste and Delete buttons. Two-step delete confirmation with red "Confirm?" text. Pagination over scroll. Matching-mode dropdown at the top.
+- **Hotkey reference modal** accessible from the library footer.
+- **Layer-by-layer view**. `PgDn` peels the top layer off the placed ghost, `PgUp` restores. Useful for tall builds and seeing interior layers while constructing.
+- **3-axis mirror toggle** (`Ctrl+Shift+M` or `.fw mirror`). Cycles None → X → Y → Z → None. Applied in the anchor-block-centered local frame so it composes correctly with player-yaw rotation. Tracker rebuilds expected positions when the ghost is already placed.
+- **`.fw restore <name>` command**. Swaps a blueprint with its rolling backup (reversible by running again). Handles the no-backup and main-file-missing cases gracefully.
+- **`Ctrl+Shift+X` cancel hotkey**. Dismisses any active ghost AND clears the selection box in one stroke. `.fw cancel` now does the same combined operation. `.fw clear` stays selection-only for granularity.
+- **Red highlight on cells that need to be cleared**. Both air-violation cells (should-be-empty but isn't) and wrong-block cells (expected block X, got block Y) render with a translucent red overlay, so the player can locate them in 3D rather than guess from a count.
+
+### Changed
+- **HUD labels now stay clean regardless of matching mode**. Display always uses `FirstCodePart` (`"cobble"`, `"log"`, `"slantedroofing"`); the variant detail used for matching lives only in the backend. Inventory counts remain truthful per mode.
+- **"Blocks to remove" count** now sums both air-violation and wrong-block cells.
+
+### Notes
+- Block variants still don't rotate with the ghost mesh; that lands with Phase 4 schematic-transform rotation in v0.2.x.
+- Chiseled blocks still render as their default shape and auto-match any chiseled block at the cell. Per-voxel comparison is Phase 4.
+
+[0.1.1]: https://github.com/Lueken/Fieldwright/releases/tag/v0.1.1
+
 ## [0.1.0] — 2026-05-18
 
 Initial public release. Phases 1, 2a, 2b, and 3a from the development brief.

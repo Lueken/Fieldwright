@@ -21,6 +21,8 @@ public class GhostChecklistDialog : HudElement
 
     private readonly GhostMatchTracker tracker;
     private readonly string blueprintName;
+    private readonly int hudOffsetX;
+    private readonly int hudOffsetY;
 
     // Lean on HudElement defaults for input behavior — those defaults (null toggle
     // code, PrefersUngrabbedMouse=false, mouse-look stays grabbed) match the
@@ -36,19 +38,22 @@ public class GhostChecklistDialog : HudElement
     public override void OnMouseMove(MouseEvent args) { }
     protected override void OnFocusChanged(bool on) { }
 
-    public GhostChecklistDialog(ICoreClientAPI capi, GhostMatchTracker tracker, string blueprintName) : base(capi)
+    public GhostChecklistDialog(ICoreClientAPI capi, GhostMatchTracker tracker, string blueprintName, int hudOffsetX, int hudOffsetY) : base(capi)
     {
         this.tracker = tracker;
         this.blueprintName = blueprintName;
+        this.hudOffsetX = hudOffsetX;
+        this.hudOffsetY = hudOffsetY;
         Compose();
-        FieldwrightLogger.Info(capi, Component, $"checklist HUD opened for '{blueprintName}'");
+        FieldwrightLogger.Info(capi, Component, $"checklist HUD opened for '{blueprintName}' at ({hudOffsetX},{hudOffsetY})");
     }
 
     private void Compose()
     {
-        // Compact panel — top-left, ~260px wide. RichText handles VTML markup
+        // Compact panel — ~260px wide. RichText handles VTML markup
         // (<font color>...) so we get inline color-coding for free.
-        var dialogBounds = ElementBounds.Fixed(8, 60, 260, 280)
+        // Offset is configurable so users can move the HUD via Fieldwright.json.
+        var dialogBounds = ElementBounds.Fixed(hudOffsetX, hudOffsetY, 260, 280)
             .WithAlignment(EnumDialogArea.LeftTop);
 
         var bgBounds = ElementBounds.Fill.WithFixedPadding(8);
@@ -85,7 +90,9 @@ public class GhostChecklistDialog : HudElement
 
         var sb = new StringBuilder();
 
-        // Progress summary
+        // Progress summary. Done cells = matched block-bearing positions + air positions that
+        // are actually empty. Wrong-block cells count as "not done" against the block total
+        // (they're occupying a position but with the wrong block).
         int totalCells = tracker.TotalBlockCells + tracker.TotalAirCells;
         int doneCells = tracker.MatchedBlocks + (tracker.TotalAirCells - tracker.AirViolationCount);
         float pct = totalCells > 0 ? (doneCells * 100f / totalCells) : 100f;
@@ -120,10 +127,10 @@ public class GhostChecklistDialog : HudElement
             }
         }
 
-        if (tracker.AirViolationCount > 0)
+        if (tracker.BlocksToRemoveCount > 0)
         {
             sb.AppendLine();
-            sb.AppendLine($"<font color=\"#ff8888\">Blocks to remove: {tracker.AirViolationCount}</font>");
+            sb.AppendLine($"<font color=\"#ff8888\">Blocks to remove: {tracker.BlocksToRemoveCount}</font>");
         }
 
         if (tracker.IsComplete)
