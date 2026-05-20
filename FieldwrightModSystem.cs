@@ -9,7 +9,7 @@ using Vintagestory.API.Util;
 [assembly: ModInfo("Fieldwright", "fieldwright",
     Authors = new string[] { "Venah" },
     Description = "A surveyor's pocket aid for builders. Client-side personal blueprint mod with anchor-snap paste.",
-    Version = "0.1.1")]
+    Version = "0.1.2-dev")]
 
 namespace Fieldwright;
 
@@ -64,7 +64,7 @@ public class FieldwrightModSystem : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         capi = api;
-        FieldwrightLogger.Info(api, Component, "loading Fieldwright v0.1.1");
+        FieldwrightLogger.Info(api, Component, "loading Fieldwright v0.1.2-dev");
 
         config = FieldwrightConfig.Load(api);
         activeMatchingMode = config.DefaultMatchingMode;
