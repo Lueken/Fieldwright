@@ -1,11 +1,27 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
 
 namespace Fieldwright;
+
+/// <summary>
+/// Lightweight blueprint summary for the library UI — derived from the on-disk file
+/// at scan time without keeping the whole schematic in memory.
+/// </summary>
+public class BlueprintEntry
+{
+    public string Name = string.Empty;
+    public int SizeX, SizeY, SizeZ;
+    public int BlockCount;
+    public string AnchorFaceLabel = string.Empty;
+    public DateTime ModifiedAt;
+    public bool HasBackup;
+}
 
 /// <summary>
 /// Read/write blueprint files in %APPDATA%/VintagestoryData/Blueprints/. Falls back to
@@ -100,6 +116,50 @@ public static class BlueprintStore
         return wrapper;
     }
 
+    /// <summary>
+    /// Swap a blueprint with its rolling backup. After the swap, `.bak.json` holds the
+    /// previously-active file and `.json` holds the previously-backed-up content.
+    /// Running restore twice in a row returns the original state, so this is a
+    /// reversible "undo last overwrite" rather than a one-shot rollback.
+    ///
+    /// Edge case: if the main file is gone (user deleted it) but the backup remains,
+    /// promote backup → main without a swap.
+    /// </summary>
+    public static RestoreResult Restore(ICoreAPI api, string name)
+    {
+        var main = GetBlueprintPath(api, name);
+        var backup = GetBackupPath(api, name);
+
+        if (!File.Exists(backup))
+        {
+            FieldwrightLogger.Warn(api, Component, $"restore '{name}' failed: no backup at {backup}");
+            return RestoreResult.NoBackup;
+        }
+
+        if (!File.Exists(main))
+        {
+            File.Move(backup, main);
+            FieldwrightLogger.Info(api, Component, $"restored '{name}' from backup (main was missing)");
+            return RestoreResult.PromotedFromBackup;
+        }
+
+        // Both exist — three-step swap via a temp file for atomicity on Windows.
+        var temp = main + ".swap";
+        if (File.Exists(temp)) File.Delete(temp);
+        File.Move(main, temp);
+        File.Move(backup, main);
+        File.Move(temp, backup);
+        FieldwrightLogger.Info(api, Component, $"swapped '{name}' with its backup");
+        return RestoreResult.Swapped;
+    }
+
+    public enum RestoreResult
+    {
+        NoBackup,
+        PromotedFromBackup,
+        Swapped,
+    }
+
     public static List<string> List(ICoreAPI api)
     {
         var dir = GetBlueprintsDirectory(api);
@@ -114,6 +174,71 @@ public static class BlueprintStore
         }
         names.Sort();
         return names;
+    }
+
+    /// <summary>
+    /// List blueprints with size + block-count metadata for the library UI. Each call
+    /// re-parses every blueprint file, which is O(n) in disk and CPU but matches user
+    /// expectations after editing files externally. Failed entries are skipped with a
+    /// warning rather than aborting the whole list.
+    /// </summary>
+    public static List<BlueprintEntry> ListWithMetadata(ICoreAPI api)
+    {
+        var dir = GetBlueprintsDirectory(api);
+        var files = Directory.GetFiles(dir, "*.json");
+        var entries = new List<BlueprintEntry>();
+        foreach (var file in files)
+        {
+            var stem = Path.GetFileNameWithoutExtension(file);
+            if (stem.EndsWith(".bak", System.StringComparison.OrdinalIgnoreCase)) continue;
+
+            try
+            {
+                var blueprint = Load(api, stem);
+                var sch = blueprint.ToBlockSchematic();
+                var face = blueprint.AnchorFacingResolved();
+                entries.Add(new BlueprintEntry
+                {
+                    Name = stem,
+                    SizeX = sch.SizeX,
+                    SizeY = sch.SizeY,
+                    SizeZ = sch.SizeZ,
+                    BlockCount = sch.Indices?.Count ?? 0,
+                    AnchorFaceLabel = face?.Code ?? "—",
+                    ModifiedAt = File.GetLastWriteTime(file),
+                    HasBackup = File.Exists(GetBackupPath(api, stem)),
+                });
+            }
+            catch (System.Exception ex)
+            {
+                FieldwrightLogger.Warn(api, Component, $"failed to read metadata for '{stem}': {ex.Message}");
+            }
+        }
+        entries.Sort((a, b) => b.ModifiedAt.CompareTo(a.ModifiedAt));
+        return entries;
+    }
+
+    /// <summary>
+    /// Delete a blueprint and its rolling backup. Throws FileNotFoundException if neither
+    /// the main file nor a backup exists. Returns silently if only one of the two exists
+    /// (deletes whatever is there).
+    /// </summary>
+    public static void Delete(ICoreAPI api, string name)
+    {
+        var main = GetBlueprintPath(api, name);
+        var backup = GetBackupPath(api, name);
+        bool mainExisted = File.Exists(main);
+        bool backupExisted = File.Exists(backup);
+
+        if (!mainExisted && !backupExisted)
+        {
+            throw new FileNotFoundException($"Blueprint not found: {name}");
+        }
+        if (mainExisted) File.Delete(main);
+        if (backupExisted) File.Delete(backup);
+
+        FieldwrightLogger.Info(api, Component,
+            $"deleted '{name}' (main={mainExisted}, backup={backupExisted})");
     }
 
     private static string SanitizeName(string name)

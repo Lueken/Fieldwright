@@ -9,7 +9,7 @@ using Vintagestory.API.Util;
 [assembly: ModInfo("Fieldwright", "fieldwright",
     Authors = new string[] { "Venah" },
     Description = "A surveyor's pocket aid for builders. Client-side personal blueprint mod with anchor-snap paste.",
-    Version = "0.1.0")]
+    Version = "0.1.1")]
 
 namespace Fieldwright;
 
@@ -19,6 +19,11 @@ public class FieldwrightModSystem : ModSystem
     private const string HotkeyCorner1 = "fieldwright-corner1";
     private const string HotkeyCorner2 = "fieldwright-corner2";
     private const string HotkeyPlace = "fieldwright-place";
+    private const string HotkeyMirror = "fieldwright-mirror";
+    private const string HotkeyLayerUp = "fieldwright-layer-up";
+    private const string HotkeyLayerDown = "fieldwright-layer-down";
+    private const string HotkeyLibrary = "fieldwright-library";
+    private const string HotkeyCancel = "fieldwright-cancel";
 
     // HighlightBlocks slot IDs. Arbitrary but must be stable per mod so we can clear them.
     private const int HighlightSlotBox = 8501;
@@ -26,6 +31,7 @@ public class FieldwrightModSystem : ModSystem
 
     private SelectionState selection = new SelectionState();
     private ICoreClientAPI? capi;
+    private FieldwrightConfig config = new FieldwrightConfig();
 
     // Active paste state — null when nothing is being pasted.
     private GhostMesh? activeGhostMesh;
@@ -33,6 +39,13 @@ public class FieldwrightModSystem : ModSystem
     private string? activeGhostName;
     private BlockSchematic? activeSchematic;
     private Vec3i activeAnchorOffset = new Vec3i(0, 0, 0);
+
+    /// <summary>
+    /// Matching mode chosen at .fw paste time. Defaults to config.DefaultMatchingMode; the
+    /// paste command can override per-blueprint. Used by SpinUpTracking when constructing
+    /// the tracker (which captures the mode for the lifetime of that ghost).
+    /// </summary>
+    private MatchingMode activeMatchingMode = MatchingMode.Loose;
 
     // Phase 3a: match tracker + HUD created on .fw place, disposed on cancel / unlock.
     private GhostMatchTracker? activeMatchTracker;
@@ -42,7 +55,6 @@ public class FieldwrightModSystem : ModSystem
     // becomes fully matched. Re-arms if the player breaks a block (uncompleting it).
     // Phase 4 will swap this for a chisel-pass toggle so users can keep the base
     // ghost visible while annotating chisel positions.
-    private const int CompletionAutoDismissMs = 5500;
     private long completionTickListenerId = -1;
     private long completionDetectedAtMs = 0;
     private bool completionDismissNotified = false;
@@ -52,7 +64,10 @@ public class FieldwrightModSystem : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         capi = api;
-        FieldwrightLogger.Info(api, Component, "loading Fieldwright v0.1.0 (Phase 1: foundation)");
+        FieldwrightLogger.Info(api, Component, "loading Fieldwright v0.1.1");
+
+        config = FieldwrightConfig.Load(api);
+        activeMatchingMode = config.DefaultMatchingMode;
 
         RegisterHotkeys(api);
         RegisterCommands(api);
@@ -75,6 +90,33 @@ public class FieldwrightModSystem : ModSystem
             GlKeys.P, HotkeyType.CharacterControls, ctrlPressed: true, shiftPressed: true);
         api.Input.SetHotKeyHandler(HotkeyPlace, _ => { ToggleGhostPlacement(); return true; });
 
+        api.Input.RegisterHotKey(HotkeyMirror, "Fieldwright: Cycle ghost mirror axis (None → X → Y → Z)",
+            GlKeys.M, HotkeyType.CharacterControls, ctrlPressed: true, shiftPressed: true);
+        api.Input.SetHotKeyHandler(HotkeyMirror, _ => { CycleGhostMirror(); return true; });
+
+        // Layer-by-layer view. PgDn peels the top layer off the ghost, PgUp adds it back.
+        // No modifiers — pure PgDn / PgUp because nothing else in Fieldwright uses them.
+        api.Input.RegisterHotKey(HotkeyLayerDown, "Fieldwright: Peel top layer off the ghost",
+            GlKeys.PageDown, HotkeyType.CharacterControls);
+        api.Input.SetHotKeyHandler(HotkeyLayerDown, _ => { AdjustGhostLayer(decrease: true); return true; });
+
+        api.Input.RegisterHotKey(HotkeyLayerUp, "Fieldwright: Restore one ghost layer",
+            GlKeys.PageUp, HotkeyType.CharacterControls);
+        api.Input.SetHotKeyHandler(HotkeyLayerUp, _ => { AdjustGhostLayer(decrease: false); return true; });
+
+        api.Input.RegisterHotKey(HotkeyLibrary, "Fieldwright: Open blueprint library",
+            GlKeys.K, HotkeyType.CharacterControls, ctrlPressed: true, shiftPressed: true);
+        api.Input.SetHotKeyHandler(HotkeyLibrary, _ => { ToggleLibraryDialog(); return true; });
+
+        api.Input.RegisterHotKey(HotkeyCancel, "Fieldwright: Cancel — dismiss active ghost and clear selection",
+            GlKeys.X, HotkeyType.CharacterControls, ctrlPressed: true, shiftPressed: true);
+        api.Input.SetHotKeyHandler(HotkeyCancel, _ =>
+        {
+            var (msg, _) = CancelAll();
+            capi?.ShowChatMessage(msg);
+            return true;
+        });
+
         // Checklist HUD toggle — manual open/close to avoid the dialog system's
         // interactive-toggle path (which grabs the cursor).
         api.Input.RegisterHotKey("fieldwright-checklist-toggle", "Fieldwright: Toggle build checklist HUD",
@@ -82,7 +124,8 @@ public class FieldwrightModSystem : ModSystem
         api.Input.SetHotKeyHandler("fieldwright-checklist-toggle", _ => { ToggleChecklistHud(); return true; });
 
         FieldwrightLogger.Info(api, Component,
-            "registered hotkeys Ctrl+Shift+B (corner1+anchor), Ctrl+Shift+N (corner2), Ctrl+Shift+P (place)");
+            "registered hotkeys Ctrl+Shift+B (corner1+anchor), Ctrl+Shift+N (corner2), Ctrl+Shift+P (place), " +
+            "Ctrl+Shift+M (mirror), Ctrl+Shift+X (cancel), PgUp/PgDn (ghost layer view), Ctrl+Shift+K (library)");
     }
 
     private bool HandleCornerHotkey(int corner)
@@ -297,8 +340,8 @@ public class FieldwrightModSystem : ModSystem
             .EndSub();
 
         root.BeginSub("paste")
-            .WithDesc("Load a blueprint and show its translucent ghost at your current position")
-            .WithArgs(parsers.Word("name"))
+            .WithDesc("Load a blueprint and show its translucent ghost. Optional matching mode: loose | medium | strict (overrides config default).")
+            .WithArgs(parsers.Word("name"), parsers.OptionalWord("matching"))
             .HandleWith(OnCmdPaste)
             .EndSub();
 
@@ -317,8 +360,43 @@ public class FieldwrightModSystem : ModSystem
             .HandleWith(OnCmdList)
             .EndSub();
 
+        root.BeginSub("restore")
+            .WithDesc("Swap a blueprint with its rolling backup (.bak.json). Reversible — run again to swap back.")
+            .WithArgs(parsers.Word("name"))
+            .HandleWith(OnCmdRestore)
+            .EndSub();
+
+        root.BeginSub("mirror")
+            .WithDesc("Cycle the active ghost's mirror axis (None → X → Y → Z). Same as Ctrl+Shift+M.")
+            .HandleWith(_ => { CycleGhostMirror(); return TextCommandResult.Success(); })
+            .EndSub();
+
+        root.BeginSub("library")
+            .WithDesc("Open the blueprint library dialog. Same as Ctrl+Shift+K.")
+            .HandleWith(_ => { ToggleLibraryDialog(); return TextCommandResult.Success(); })
+            .EndSub();
+
         FieldwrightLogger.Info(api, Component,
-            "registered .fw commands: corner1, corner2, grow, shrink, status, clear, save, paste, place, cancel, list");
+            "registered .fw commands: corner1, corner2, grow, shrink, status, clear, save, paste, place, cancel, list, restore, mirror, library");
+    }
+
+    private TextCommandResult OnCmdRestore(TextCommandCallingArgs args)
+    {
+        if (capi == null) return TextCommandResult.Error("Client API not available.");
+
+        var name = (string)args[0];
+        var result = BlueprintStore.Restore(capi, name);
+
+        return result switch
+        {
+            BlueprintStore.RestoreResult.NoBackup => TextCommandResult.Error(
+                $"[Fieldwright] No backup found for '{name}'. Backups are created automatically when you overwrite an existing blueprint."),
+            BlueprintStore.RestoreResult.PromotedFromBackup => TextCommandResult.Success(
+                $"[Fieldwright] Restored '{name}' from backup (main file was missing)."),
+            BlueprintStore.RestoreResult.Swapped => TextCommandResult.Success(
+                $"[Fieldwright] Swapped '{name}' with its backup. Run `.fw restore {name}` again to swap back."),
+            _ => TextCommandResult.Error("[Fieldwright] Unknown restore result."),
+        };
     }
 
     private TextCommandResult OnCmdGrowOrShrink(TextCommandCallingArgs args, bool grow)
@@ -448,6 +526,29 @@ public class FieldwrightModSystem : ModSystem
         if (capi == null) return TextCommandResult.Error("Client API not available.");
 
         var name = (string)args[0];
+        var matchingArg = args[1] as string;
+        var requestedMode = FieldwrightConfig.ParseMatchingMode(matchingArg);
+        if (matchingArg != null && requestedMode == null)
+        {
+            return TextCommandResult.Error(
+                $"[Fieldwright] Unknown matching mode '{matchingArg}'. Valid: loose, medium, strict.");
+        }
+        activeMatchingMode = requestedMode ?? config.DefaultMatchingMode;
+
+        var (ok, message) = DoPaste(name);
+        return ok ? TextCommandResult.Success(message) : TextCommandResult.Error(message);
+    }
+
+    /// <summary>
+    /// Core paste implementation. Sets up activeGhostMesh, activeGhostRenderer, schematic,
+    /// and anchor offset. Caller is responsible for setting activeMatchingMode beforehand
+    /// since the tracker doesn't spin up until .fw place / Ctrl+Shift+P. Returns (success,
+    /// message) so both the chat command handler and the library dialog can route the
+    /// result back to the user.
+    /// </summary>
+    private (bool ok, string message) DoPaste(string name)
+    {
+        if (capi == null) return (false, "Client API not available.");
 
         try
         {
@@ -460,63 +561,82 @@ public class FieldwrightModSystem : ModSystem
             var anchorOffset = blueprint.AnchorOffsetAsVec3i();
             var savedFace = blueprint.AnchorFacingResolved();
 
-            // Phase 2b: ghost enters floating mode and tracks the player's crosshair.
-            // .fw place / Ctrl+Shift+P locks it; .fw cancel dismisses.
             ClearActiveGhost();
 
-            var ghostMesh = new GhostMesh(capi, schematic, anchorOffset);
+            var ghostMesh = new GhostMesh(capi, schematic, anchorOffset, config.GhostAlpha);
             if (!ghostMesh.HasMesh)
             {
                 ghostMesh.Dispose();
-                return TextCommandResult.Error(
-                    $"[Fieldwright] '{name}' produced an empty mesh ({ghostMesh.SkippedCount} blocks skipped). Check the log.");
+                return (false, $"[Fieldwright] '{name}' produced an empty mesh ({ghostMesh.SkippedCount} blocks skipped). Check the log.");
             }
 
-            // Initial origin: current look-target if any, else the block in front of the player.
             var initialOrigin = capi.World.Player?.CurrentBlockSelection?.Position?.Copy()
                 ?? capi.World.Player!.Entity.Pos.AsBlockPos;
 
             activeGhostMesh = ghostMesh;
             activeGhostRenderer = new GhostRenderer(
-                capi, ghostMesh, initialOrigin, anchorOffset, savedFace, startFloating: true);
+                capi, ghostMesh, initialOrigin, anchorOffset, savedFace, startFloating: true,
+                renderRange: config.RenderDistanceBlocks);
             activeGhostName = name;
             activeSchematic = schematic;
             activeAnchorOffset = anchorOffset;
 
             FieldwrightLogger.Info(capi, Component,
-                $"pasting '{name}': size={schematic.SizeX}×{schematic.SizeY}×{schematic.SizeZ}, " +
+                $"pasting '{name}': size={schematic.SizeX}x{schematic.SizeY}x{schematic.SizeZ}, " +
                 $"meshed={ghostMesh.BlockCount}, skipped={ghostMesh.SkippedCount}, " +
                 $"initialOrigin=({initialOrigin.X},{initialOrigin.Y},{initialOrigin.Z}), " +
-                $"savedFace={savedFace?.Code ?? "none"}");
+                $"savedFace={savedFace?.Code ?? "none"}, mode={activeMatchingMode}");
 
             var rotateNote = savedFace != null
-                ? "Aim at a block face — ghost rotates to align."
+                ? "Aim at a block face, ghost rotates to align."
                 : "Saved blueprint has no horizontal anchor face; ghost won't auto-rotate.";
-            return TextCommandResult.Success(
-                $"[Fieldwright] Ghost active (floating): '{name}' — {schematic.SizeX}×{schematic.SizeY}×{schematic.SizeZ}, " +
-                $"{ghostMesh.BlockCount} blocks. {rotateNote} .fw place / Ctrl+Shift+P to lock, .fw cancel to dismiss.");
+            return (true,
+                $"[Fieldwright] Ghost active (floating): '{name}' ({schematic.SizeX}x{schematic.SizeY}x{schematic.SizeZ}, " +
+                $"{ghostMesh.BlockCount} blocks, {activeMatchingMode} matching). {rotateNote} .fw place / Ctrl+Shift+P to lock, .fw cancel to dismiss.");
         }
         catch (System.IO.FileNotFoundException)
         {
-            return TextCommandResult.Error($"[Fieldwright] No blueprint named '{name}'. Try .fw list.");
+            return (false, $"[Fieldwright] No blueprint named '{name}'. Try .fw list.");
         }
         catch (System.Exception ex)
         {
             FieldwrightLogger.Error(capi, Component, $"paste failed: {ex}");
-            return TextCommandResult.Error($"[Fieldwright] Load failed: {ex.Message}");
+            return (false, $"[Fieldwright] Load failed: {ex.Message}");
         }
     }
 
     private TextCommandResult OnCmdCancel(TextCommandCallingArgs args)
     {
-        if (activeGhostName == null)
+        var (msg, _) = CancelAll();
+        return TextCommandResult.Success(msg);
+    }
+
+    /// <summary>
+    /// "Stop everything" — dismiss any active ghost AND clear the current selection box.
+    /// Combined intentionally: from a player's perspective both are "I'm done with this
+    /// Fieldwright operation". `.fw clear` stays as the selection-only escape hatch for
+    /// users who want granularity.
+    /// </summary>
+    private (string message, bool didAnything) CancelAll()
+    {
+        bool clearedGhost = activeGhostName != null;
+        string prevName = activeGhostName ?? string.Empty;
+        if (clearedGhost) ClearActiveGhost();
+
+        bool clearedSelection = selection.HasSelection;
+        if (clearedSelection)
         {
-            return TextCommandResult.Success("[Fieldwright] No active ghost to cancel.");
+            selection.Clear();
+            ClearHighlight();
         }
 
-        var prevName = activeGhostName;
-        ClearActiveGhost();
-        return TextCommandResult.Success($"[Fieldwright] Ghost '{prevName}' dismissed.");
+        if (clearedGhost && clearedSelection)
+            return ($"[Fieldwright] Ghost '{prevName}' dismissed; selection cleared.", true);
+        if (clearedGhost)
+            return ($"[Fieldwright] Ghost '{prevName}' dismissed.", true);
+        if (clearedSelection)
+            return ("[Fieldwright] Selection cleared.", true);
+        return ("[Fieldwright] Nothing active to cancel.", false);
     }
 
     private void ClearActiveGhost()
@@ -595,6 +715,132 @@ public class FieldwrightModSystem : ModSystem
         }
     }
 
+    /// <summary>
+    /// Cycle the active ghost's mirror axis (None → X → Y → Z → None). If the ghost
+    /// is already placed, the tracker is rebuilt so expected positions follow the new
+    /// mirror — pre-existing matches are recomputed via the tracker's InitialScan.
+    /// </summary>
+    private void CycleGhostMirror()
+    {
+        if (capi == null) return;
+
+        if (activeGhostRenderer == null)
+        {
+            capi.ShowChatMessage("[Fieldwright] No active ghost — load a blueprint with .fw paste first.");
+            return;
+        }
+
+        activeGhostRenderer.CycleMirror();
+        var state = activeGhostRenderer.CurrentMirror;
+        string label = state == MirrorAxis.None ? "off" : $"axis {state}";
+
+        if (!activeGhostRenderer.IsFloating && activeSchematic != null)
+        {
+            // Ghost is locked. Rebuild tracking so expected positions follow the
+            // new mirror state. The HUD will re-open via SpinUpTracking.
+            TearDownTracking();
+            SpinUpTracking();
+        }
+
+        capi.ShowChatMessage($"[Fieldwright] Mirror {label}.");
+    }
+
+    /// <summary>
+    /// PgDn / PgUp adjust how many layers of the ghost render from the top down.
+    /// Only meaningful when a ghost is active; silent no-op otherwise so the keys
+    /// remain usable for whatever else the game does with them.
+    /// </summary>
+    private void AdjustGhostLayer(bool decrease)
+    {
+        if (activeGhostRenderer == null) return;
+
+        if (decrease) activeGhostRenderer.DecreaseVisibleLayers();
+        else activeGhostRenderer.IncreaseVisibleLayers();
+    }
+
+    private SchematicLibraryDialog? activeLibraryDialog;
+
+    /// <summary>
+    /// Ctrl+Shift+K: open the library when nothing is showing, close everything
+    /// Fieldwright (library + hotkey help modal) when at least one is open. The
+    /// hotkey help modal is owned by the library dialog, so we delegate the
+    /// "close everything" path to the library's CloseAll().
+    /// </summary>
+    private void ToggleLibraryDialog()
+    {
+        if (capi == null) return;
+
+        if (activeLibraryDialog != null && activeLibraryDialog.IsAnythingOpen())
+        {
+            activeLibraryDialog.CloseAll();
+            return;
+        }
+
+        activeLibraryDialog ??= new SchematicLibraryDialog(capi, this);
+        activeLibraryDialog.Refresh();
+        activeLibraryDialog.TryOpen();
+    }
+
+    /// <summary>
+    /// Library-dialog callback: paste a blueprint by name with the chosen matching mode.
+    /// Calls the same code path as the .fw paste chat command (capi.SendChatMessage on
+    /// client-side commands fired from a GUI button doesn't always route through the
+    /// command system, so we invoke directly).
+    /// </summary>
+    public void PasteFromLibrary(string name, MatchingMode mode)
+    {
+        if (capi == null) return;
+
+        activeMatchingMode = mode;
+        var (ok, message) = DoPaste(name);
+        capi.ShowChatMessage(message);
+        if (!ok)
+        {
+            FieldwrightLogger.Warn(capi, Component, $"library paste failed for '{name}': {message}");
+        }
+    }
+
+    /// <summary>Library-dialog callback: delete a saved blueprint.</summary>
+    public bool DeleteFromLibrary(string name)
+    {
+        if (capi == null) return false;
+        try
+        {
+            BlueprintStore.Delete(capi, name);
+            capi.ShowChatMessage($"[Fieldwright] Deleted blueprint '{name}'.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            capi.ShowChatMessage($"[Fieldwright] Failed to delete '{name}': {ex.Message}");
+            return false;
+        }
+    }
+
+    public MatchingMode GetDefaultMatchingMode() => config.DefaultMatchingMode;
+
+    /// <summary>
+    /// Persist a new default matching mode to ModConfig/Fieldwright.json so it survives
+    /// across sessions. Called by the library dialog when the user picks a mode from the
+    /// dropdown — the in-memory config also updates so subsequent .fw paste calls without
+    /// an explicit mode use the new default.
+    /// </summary>
+    public void SetDefaultMatchingMode(MatchingMode mode)
+    {
+        if (capi == null) return;
+        if (config.DefaultMatchingMode == mode) return;
+        config.DefaultMatchingMode = mode;
+        try
+        {
+            capi.StoreModConfig(config, "Fieldwright.json");
+            FieldwrightLogger.Info(capi, "config", $"default matching mode saved: {mode}");
+        }
+        catch (Exception ex)
+        {
+            FieldwrightLogger.Warn(capi, "config", $"failed to save config: {ex.Message}");
+        }
+    }
+
     private void SpinUpTracking()
     {
         if (capi == null || activeGhostRenderer == null || activeSchematic == null || activeGhostName == null) return;
@@ -605,9 +851,11 @@ public class FieldwrightModSystem : ModSystem
         rot = ((rot % 4) + 4) % 4;
 
         activeMatchTracker = new GhostMatchTracker(
-            capi, activeSchematic, activeAnchorOffset, activeGhostRenderer.Origin, rot);
+            capi, activeSchematic, activeAnchorOffset, activeGhostRenderer.Origin, rot,
+            activeGhostRenderer.CurrentMirror, activeMatchingMode);
 
-        activeChecklistDialog = new GhostChecklistDialog(capi, activeMatchTracker, activeGhostName);
+        activeChecklistDialog = new GhostChecklistDialog(capi, activeMatchTracker, activeGhostName,
+            config.HudOffsetX, config.HudOffsetY);
         activeChecklistDialog.TryOpen();
 
         // Poll every 250ms for completion → start the dismiss timer.
@@ -640,13 +888,13 @@ public class FieldwrightModSystem : ModSystem
             if (!completionDismissNotified)
             {
                 capi.ShowChatMessage(
-                    $"[Fieldwright] Structure complete! Ghost will auto-dismiss in {CompletionAutoDismissMs / 1000} seconds.");
+                    $"[Fieldwright] Structure complete! Ghost will auto-dismiss in {config.AutoDismissMs / 1000} seconds.");
                 completionDismissNotified = true;
             }
             return;
         }
 
-        if (now - completionDetectedAtMs >= CompletionAutoDismissMs)
+        if (now - completionDetectedAtMs >= config.AutoDismissMs)
         {
             capi.ShowChatMessage($"[Fieldwright] Build complete — '{activeGhostName}' dismissed.");
             ClearActiveGhost();
