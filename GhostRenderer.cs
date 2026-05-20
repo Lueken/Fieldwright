@@ -22,7 +22,7 @@ public enum MirrorAxis
 
 /// <summary>
 /// Renders an uploaded ghost mesh with alpha blending. Owns its IRenderer
-/// lifecycle — register on construction, unregister on Dispose.
+/// lifecycle, register on construction, unregister on Dispose.
 ///
 /// Two modes:
 ///   - Floating: ghost follows the player's look-target each frame. The Y
@@ -55,7 +55,7 @@ public class GhostRenderer : IRenderer
     /// <summary>
     /// How many bottom layers of the ghost mesh are rendered. Range [0, ghost.LayerCount].
     /// PgDn decreases (peels layers off the top), PgUp increases (restores). Doesn't affect
-    /// match detection or air-violation tracking — purely a visual filter so the player can
+    /// match detection or air-violation tracking, purely a visual filter so the player can
     /// see interior layers of tall builds.
     /// </summary>
     public int VisibleLayers { get; private set; }
@@ -104,7 +104,7 @@ public class GhostRenderer : IRenderer
     public void Unplace()
     {
         IsFloating = true;
-        FieldwrightLogger.Info(capi, Component, "ghost unplaced — back to floating mode");
+        FieldwrightLogger.Info(capi, Component, "ghost unplaced, back to floating mode");
     }
 
     /// <summary>
@@ -161,7 +161,7 @@ public class GhostRenderer : IRenderer
             if (sel?.Position != null && sel.Face != null)
             {
                 // Position: anchor lands ADJACENT to the targeted block on the side of
-                // the face the player is aiming at — same semantics as placing a real
+                // the face the player is aiming at, same semantics as placing a real
                 // block. Aim at top of ground → ghost sits on top (Y+1). Aim at a
                 // wall's south face → ghost sits south of that wall (Z+1).
                 var n = sel.Face.Normali;
@@ -173,7 +173,7 @@ public class GhostRenderer : IRenderer
 
                 // Rotation: derived from player yaw (where the player is facing),
                 // not the targeted block face. The anchor's saved front face should
-                // point AT the player — i.e., opposite their look direction. This
+                // point AT the player, i.e., opposite their look direction. This
                 // works for aiming at horizontal walls AND at vertical surfaces like
                 // the top of a ground block, because we don't depend on the block face.
                 if (savedAnchorFace != null && savedAnchorFace.IsHorizontal)
@@ -211,7 +211,7 @@ public class GhostRenderer : IRenderer
         // Build model matrix (post-multiply chain: lines below execute on the vertex first):
         //   1. T_anchor: subtract anchorOffset → anchor cell at mesh origin
         //   2. T_mirror_center (-0.5,-0.5,-0.5): anchor BLOCK CENTER at origin
-        //   3. Scale by mirror axis (±1 each component) — mirror in anchor-centered local frame
+        //   3. Scale by mirror axis (±1 each component), mirror in anchor-centered local frame
         //   4. T_mirror_uncenter (+0.5,+0.5,+0.5): restore anchor cell to [0,1]^3
         //   5. T_rot_center (-0.5, 0, -0.5): rotation pivot at anchor XZ center
         //   6. RotateY

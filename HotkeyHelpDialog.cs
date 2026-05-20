@@ -52,7 +52,7 @@ public class HotkeyHelpDialog : GuiDialog
 
         var composer = capi.Gui.CreateCompo(ComposerKey, dialogBounds)
             .AddShadedDialogBG(bgBounds)
-            .AddDialogTitleBar("Fieldwright — Hotkeys", () => TryClose())
+            .AddDialogTitleBar("Fieldwright, Hotkeys", () => TryClose())
             .BeginChildElements(contentBounds);
 
         composer.AddStaticText("Active anywhere in-world while Fieldwright is loaded:", headerFont,

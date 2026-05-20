@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file. Format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.1.1] — 2026-05-20
+## [0.1.1] - 2026-05-20
 
 The "polish + power-user" release. Adds the schematic library UI, three matching modes, a 3-axis mirror, layer-by-layer view, in-world red highlights for blocks that need to be cleared, plus a mod config file with user-tunable knobs.
 

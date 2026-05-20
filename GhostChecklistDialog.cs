@@ -10,7 +10,7 @@ namespace Fieldwright;
 /// HUD overlay showing the active ghost's build progress. Inherits from HudElement
 /// so it doesn't grab focus / lock the cursor. Top-left, compact, semi-transparent.
 ///
-/// Materials are grouped by block.FirstCodePart() — e.g., all variants of slanted
+/// Materials are grouped by block.FirstCodePart(), e.g., all variants of slanted
 /// roofing share one row. Coarser than per-variant tracking but matches builder
 /// intuition ("how many of THIS thing do I need").
 /// </summary>
@@ -24,7 +24,7 @@ public class GhostChecklistDialog : HudElement
     private readonly int hudOffsetX;
     private readonly int hudOffsetY;
 
-    // Lean on HudElement defaults for input behavior — those defaults (null toggle
+    // Lean on HudElement defaults for input behavior. Those defaults (null toggle
     // code, PrefersUngrabbedMouse=false, mouse-look stays grabbed) match the
     // vanilla boss-health-bar pattern. Earlier overrides of PrefersUngrabbedMouse
     // and DisableMouseGrab were releasing the cursor on open, which broke camera
@@ -33,7 +33,7 @@ public class GhostChecklistDialog : HudElement
     public override bool Focusable => false;
     public override bool ShouldReceiveKeyboardEvents() => false;
 
-    public override void OnMouseDown(MouseEvent args) { /* HUD is non-interactive — let game handle clicks */ }
+    public override void OnMouseDown(MouseEvent args) { /* HUD is non-interactive. Let the game handle clicks */ }
     public override void OnMouseUp(MouseEvent args) { }
     public override void OnMouseMove(MouseEvent args) { }
     protected override void OnFocusChanged(bool on) { }
@@ -50,7 +50,7 @@ public class GhostChecklistDialog : HudElement
 
     private void Compose()
     {
-        // Compact panel — ~260px wide. RichText handles VTML markup
+        // Compact panel, ~260px wide. RichText handles VTML markup
         // (<font color>...) so we get inline color-coding for free.
         // Offset is configurable so users can move the HUD via Fieldwright.json.
         var dialogBounds = ElementBounds.Fixed(hudOffsetX, hudOffsetY, 260, 280)
@@ -69,7 +69,7 @@ public class GhostChecklistDialog : HudElement
         Composers["fieldwright-checklist"] =
             capi.Gui.CreateCompo("fieldwright-checklist", bgBounds)
                 .BeginChildElements(dialogBounds)
-                    .AddStaticText($"Fieldwright — {blueprintName}", titleFont,
+                    .AddStaticText($"Fieldwright: {blueprintName}", titleFont,
                         ElementBounds.Fixed(0, 0, 240, 20))
                     .AddRichtext("", bodyFont,
                         ElementBounds.Fixed(0, 24, 240, 256), "body")
@@ -100,7 +100,7 @@ public class GhostChecklistDialog : HudElement
 
         // Tracker already aggregates by group key (e.g. "slantedroofing"), so the
         // HUD just renders each entry directly. Inventory counts come from the
-        // tracker for the same reason — matching and display share the group key.
+        // tracker for the same reason. Matching and display share the group key.
         var needs = tracker.GetMaterialNeeds();
         if (needs.Count > 0)
         {

@@ -10,7 +10,7 @@ using Vintagestory.API.MathTools;
 namespace Fieldwright;
 
 /// <summary>
-/// Lightweight blueprint summary for the library UI — derived from the on-disk file
+/// Lightweight blueprint summary for the library UI. Derived from the on-disk file
 /// at scan time without keeping the whole schematic in memory.
 /// </summary>
 public class BlueprintEntry
@@ -59,7 +59,7 @@ public static class BlueprintStore
 
     /// <summary>
     /// If a blueprint with this name exists on disk, copy it to {name}.bak.json
-    /// (single rolling backup — previous .bak is overwritten). Returns the backup
+    /// (single rolling backup. Previous .bak is overwritten.) Returns the backup
     /// path if a backup was made, null otherwise.
     /// </summary>
     public static string? BackupExisting(ICoreAPI api, string name)
@@ -96,7 +96,7 @@ public static class BlueprintStore
         if (parsed["schematic"] == null && parsed["anchorOffset"] == null)
         {
             FieldwrightLogger.Info(api, Component,
-                $"loaded bare schematic '{name}' (no wrapper) — implicit anchor (0,0,0)");
+                $"loaded bare schematic '{name}' (no wrapper, implicit anchor (0,0,0))");
             return new BlueprintFile
             {
                 Version = "compat-bare",
@@ -143,7 +143,7 @@ public static class BlueprintStore
             return RestoreResult.PromotedFromBackup;
         }
 
-        // Both exist — three-step swap via a temp file for atomicity on Windows.
+        // Both exist. Three-step swap via a temp file for atomicity on Windows.
         var temp = main + ".swap";
         if (File.Exists(temp)) File.Delete(temp);
         File.Move(main, temp);
@@ -204,7 +204,7 @@ public static class BlueprintStore
                     SizeY = sch.SizeY,
                     SizeZ = sch.SizeZ,
                     BlockCount = sch.Indices?.Count ?? 0,
-                    AnchorFaceLabel = face?.Code ?? "—",
+                    AnchorFaceLabel = face?.Code ?? "-",
                     ModifiedAt = File.GetLastWriteTime(file),
                     HasBackup = File.Exists(GetBackupPath(api, stem)),
                 });

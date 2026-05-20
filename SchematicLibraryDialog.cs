@@ -10,7 +10,7 @@ namespace Fieldwright;
 /// Per-row Paste and Delete actions; matching-mode dropdown at the top sets the mode
 /// used by the Paste action (defaults to the user's config setting).
 ///
-/// Pagination instead of scrollbar to keep the composer-bounds tree simple — VS GUI
+/// Pagination instead of scrollbar to keep the composer-bounds tree simple, VS GUI
 /// recompose is finicky when many child bounds change at once.
 /// </summary>
 public class SchematicLibraryDialog : GuiDialog
@@ -93,14 +93,14 @@ public class SchematicLibraryDialog : GuiDialog
         var rowFont = CairoFont.WhiteSmallText();
         var dimFont = CairoFont.WhiteDetailText();
 
-        // Header row — TitleBarPad keeps content from overlapping the dialog title bar.
+        // Header row, TitleBarPad keeps content from overlapping the dialog title bar.
         var modeLabelBounds = ElementBounds.Fixed(0, TitleBarPad + 14, 220, 24);
         var modeDropdownBounds = ElementBounds.Fixed(225, TitleBarPad + 10, 230, 30);
         var countLabelBounds = ElementBounds.Fixed(470, TitleBarPad + 14, 170, 24);
 
         var composer = capi.Gui.CreateCompo(ComposerKey, dialogBounds)
             .AddShadedDialogBG(bgBounds)
-            .AddDialogTitleBar("Fieldwright — Blueprint Library", OnTitleBarClose)
+            .AddDialogTitleBar("Fieldwright, Blueprint Library", OnTitleBarClose)
             .BeginChildElements(contentBounds)
                 .AddStaticText("Default matching mode:", titleFont, modeLabelBounds)
                 .AddDropDown(
@@ -164,7 +164,7 @@ public class SchematicLibraryDialog : GuiDialog
             }
         }
 
-        // Footer — pagination + hotkeys + reload.
+        // Footer, pagination + hotkeys + reload.
         int footerY = HeaderHeight + rowsHeight + 10;
         var prevBtnBounds = ElementBounds.Fixed(0, footerY, 90, 32);
         var pageLabelBounds = ElementBounds.Fixed(100, footerY + 6, 100, 24);

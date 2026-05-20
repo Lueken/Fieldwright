@@ -20,12 +20,12 @@ A client-side blueprint and build-along tool. Copy any region with an anchor cor
 
 ## A typical session
 
-1. Stand at the corner of a structure you want to copy. Aim at the corner block — the face you target becomes the saved "front" for later auto-rotation.
+1. Stand at the corner of a structure you want to copy. Aim at the corner block. The face you target becomes the saved "front" for later auto-rotation.
 2. Press `Ctrl+Shift+B` to set corner 1 (also the anchor).
 3. Walk to the opposite top corner. Aim at it. Press `Ctrl+Shift+N` to set corner 2. A green translucent box marks the selection.
 4. Run `.fw save my-house`. A JSON file lands in `%APPDATA%/VintagestoryData/Blueprints/`.
 5. Travel anywhere. Press `Ctrl+Shift+K` to open the library. Click Paste on `my-house`.
-6. A translucent ghost appears, tracking your crosshair. Walk around — it stays aligned.
+6. A translucent ghost appears, tracking your crosshair. Walk around. It stays aligned.
 7. Aim at a block face where you want to build. The ghost snaps and rotates so its saved front faces you.
 8. Optional: press `Ctrl+Shift+M` to mirror, or use `PgDn` / `PgUp` to peel layers off the top.
 9. Press `Ctrl+Shift+P` to lock placement. The checklist HUD opens.
@@ -53,13 +53,13 @@ All hotkeys are rebindable under **Settings → Controls → Mod controls** → 
 
 Most have a hotkey equivalent. Useful command-only entries:
 
-- `.fw grow <up|down|north|south|east|west> [n]` — extend the selection on one face
-- `.fw shrink <up|down|north|south|east|west> [n]` — contract one face
-- `.fw save <name> [overwrite]` — save the current selection. `overwrite` required to replace an existing file (a rolling backup is created).
-- `.fw paste <name> [loose|medium|strict]` — load a blueprint with an optional matching mode override.
-- `.fw restore <name>` — swap a blueprint with its rolling backup. Reversible.
-- `.fw list` — print all saved blueprints to chat
-- `.fw status` — show current selection size and anchor
+- `.fw grow <up|down|north|south|east|west> [n]`: extend the selection on one face
+- `.fw shrink <up|down|north|south|east|west> [n]`: contract one face
+- `.fw save <name> [overwrite]`: save the current selection. `overwrite` required to replace an existing file (a rolling backup is created).
+- `.fw paste <name> [loose|medium|strict]`: load a blueprint with an optional matching mode override.
+- `.fw restore <name>`: swap a blueprint with its rolling backup. Reversible.
+- `.fw list`: print all saved blueprints to chat
+- `.fw status`: show current selection size and anchor
 
 * * *
 
@@ -68,7 +68,7 @@ Most have a hotkey equivalent. Useful command-only entries:
 The mod ships with three levels of block fidelity, controllable per-paste or globally:
 
 - **Loose** (default). `block.FirstCodePart()` only. Andesite cobble, granite cobble, basalt cobble all count as "cobble". Oak logs, pine logs, redwood logs all count as "log". Survival-friendly when you can't source the exact creative materials.
-- **Medium**. VS's variant system, but orientation variants stripped (rotation, side, facing). Andesite cobble stays distinct from granite cobble. Oak log stays distinct from pine log. But all rotations of slanted thatch still group together (you can't directly control orientation anyway — the engine picks it at placement).
+- **Medium**. VS's variant system, but orientation variants stripped (rotation, side, facing). Andesite cobble stays distinct from granite cobble. Oak log stays distinct from pine log. But all rotations of slanted thatch still group together (you can't directly control orientation anyway; the engine picks it at placement).
 - **Strict**. Full block code including every variant. Practically unusable because the engine auto-orients blocks at placement, but exposed for completeness.
 
 The library dropdown saves your choice to `Fieldwright.json` so it persists across sessions. Whatever you pick is also the default when you use `.fw paste <name>` without a mode argument.
@@ -102,9 +102,7 @@ It works on any vanilla server out of the box. **Some servers run a strict mod a
 
 ## Roadmap
 
-- **v0.2.0** (next major) — picking ONE as headline:
-  - **Phase 4: Chisel voxel overlay**. Per-voxel red/green/yellow hints for chiseled positions after base blocks match. Also fixes block-variant rotation (stairs, logs, doors will rotate correctly with the ghost). Real differentiator: no other VS blueprint mod does this.
-  - **Phase 3b: In-game handbook tab**. Browse saved blueprints in the Vintage Story handbook with material breakdowns and a paste button. Easier and more visible, less unique.
+- **v0.2.0 headline: Phase 4 chisel voxel overlay**. Per-voxel red/green/yellow hints for chiseled positions after base blocks match. Also fixes block-variant rotation (stairs, logs, doors will rotate correctly with the ghost). No other VS blueprint mod does per-voxel ghost annotation.
 - **Smaller backlog**: localization scaffold, modicon.png, multiple named active ghosts simultaneously.
 
 * * *
@@ -127,7 +125,7 @@ No. You still place every block by hand through Vintage Story's normal channels.
 You're probably in Medium or Strict matching mode and your cobble is the wrong rock type. Hover over an unmatched red cell to see what's expected, or run `.fw paste <name> loose` for the v0.1.0 family-grouping behavior.
 
 **How do I uninstall?**
-Delete `fieldwright` (folder or zip) from `%APPDATA%/VintagestoryData/Mods/`. Your blueprints and config stay where they are — both are user-owned and outside the mod scope.
+Delete `fieldwright` (folder or zip) from `%APPDATA%/VintagestoryData/Mods/`. Your blueprints and config stay where they are. Both are user-owned and outside the mod scope.
 
 * * *
 

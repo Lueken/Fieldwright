@@ -33,7 +33,7 @@ public class FieldwrightModSystem : ModSystem
     private ICoreClientAPI? capi;
     private FieldwrightConfig config = new FieldwrightConfig();
 
-    // Active paste state — null when nothing is being pasted.
+    // Active paste state, null when nothing is being pasted.
     private GhostMesh? activeGhostMesh;
     private GhostRenderer? activeGhostRenderer;
     private string? activeGhostName;
@@ -73,7 +73,7 @@ public class FieldwrightModSystem : ModSystem
         RegisterCommands(api);
 
         FieldwrightLogger.Info(api, Component,
-            $"ready — blueprints directory: {BlueprintStore.GetBlueprintsDirectory(api)}");
+            $"ready, blueprints directory: {BlueprintStore.GetBlueprintsDirectory(api)}");
     }
 
     private void RegisterHotkeys(ICoreClientAPI api)
@@ -95,7 +95,7 @@ public class FieldwrightModSystem : ModSystem
         api.Input.SetHotKeyHandler(HotkeyMirror, _ => { CycleGhostMirror(); return true; });
 
         // Layer-by-layer view. PgDn peels the top layer off the ghost, PgUp adds it back.
-        // No modifiers — pure PgDn / PgUp because nothing else in Fieldwright uses them.
+        // No modifiers, pure PgDn / PgUp because nothing else in Fieldwright uses them.
         api.Input.RegisterHotKey(HotkeyLayerDown, "Fieldwright: Peel top layer off the ghost",
             GlKeys.PageDown, HotkeyType.CharacterControls);
         api.Input.SetHotKeyHandler(HotkeyLayerDown, _ => { AdjustGhostLayer(decrease: true); return true; });
@@ -108,7 +108,7 @@ public class FieldwrightModSystem : ModSystem
             GlKeys.K, HotkeyType.CharacterControls, ctrlPressed: true, shiftPressed: true);
         api.Input.SetHotKeyHandler(HotkeyLibrary, _ => { ToggleLibraryDialog(); return true; });
 
-        api.Input.RegisterHotKey(HotkeyCancel, "Fieldwright: Cancel — dismiss active ghost and clear selection",
+        api.Input.RegisterHotKey(HotkeyCancel, "Fieldwright: Cancel, dismiss active ghost and clear selection",
             GlKeys.X, HotkeyType.CharacterControls, ctrlPressed: true, shiftPressed: true);
         api.Input.SetHotKeyHandler(HotkeyCancel, _ =>
         {
@@ -117,7 +117,7 @@ public class FieldwrightModSystem : ModSystem
             return true;
         });
 
-        // Checklist HUD toggle — manual open/close to avoid the dialog system's
+        // Checklist HUD toggle, manual open/close to avoid the dialog system's
         // interactive-toggle path (which grabs the cursor).
         api.Input.RegisterHotKey("fieldwright-checklist-toggle", "Fieldwright: Toggle build checklist HUD",
             GlKeys.L, HotkeyType.CharacterControls, ctrlPressed: true, shiftPressed: true);
@@ -135,7 +135,7 @@ public class FieldwrightModSystem : ModSystem
         var sel = capi.World.Player?.CurrentBlockSelection;
         if (sel?.Position == null)
         {
-            capi.ShowChatMessage($"[Fieldwright] No block under crosshair — look at a block to set corner {corner}.");
+            capi.ShowChatMessage($"[Fieldwright] No block under crosshair, look at a block to set corner {corner}.");
             return true;
         }
 
@@ -153,8 +153,8 @@ public class FieldwrightModSystem : ModSystem
             var faceNote = face == null
                 ? string.Empty
                 : (face.IsHorizontal
-                    ? $" (facing {face.Code} — auto-rotate on paste will align this face)"
-                    : $" (facing {face.Code} — vertical face captured; auto-rotate disabled)");
+                    ? $" (facing {face.Code}, auto-rotate on paste will align this face)"
+                    : $" (facing {face.Code}, vertical face captured; auto-rotate disabled)");
             capi.ShowChatMessage($"[Fieldwright] Corner 1 (anchor) set at {FormatPos(pos)}.{faceNote}");
         }
         else
@@ -175,7 +175,7 @@ public class FieldwrightModSystem : ModSystem
 
         var (dx, dy, dz) = selection.GetDimensions();
         var heightHint = dy == 1
-            ? "  (Only 1 block tall — set corner2 at the opposite TOP corner, or grow up with .fw grow up <n>.)"
+            ? "  (Only 1 block tall, set corner2 at the opposite TOP corner, or grow up with .fw grow up <n>.)"
             : string.Empty;
         capi.ShowChatMessage(
             $"[Fieldwright] Selection: {dx} wide × {dy} tall × {dz} deep = {dx * dy * dz} cells. " +
@@ -209,7 +209,7 @@ public class FieldwrightModSystem : ModSystem
             // Fall back to face-only highlight: only the 6 outer faces of the cuboid.
             HighlightFacesOnly(min, max, anchor);
             FieldwrightLogger.Debug(capi, Component,
-                $"selection {width}×{height}×{depth}={total} > {MaxHighlightCells} — using face-only highlight");
+                $"selection {width}×{height}×{depth}={total} > {MaxHighlightCells}, using face-only highlight");
             return;
         }
 
@@ -299,7 +299,7 @@ public class FieldwrightModSystem : ModSystem
         var parsers = api.ChatCommands.Parsers;
 
         var root = api.ChatCommands.Create("fw")
-            .WithDesc("Fieldwright — personal blueprint commands");
+            .WithDesc("Fieldwright, personal blueprint commands");
 
         root.BeginSub("corner1")
             .WithDesc("Set corner 1 (the placement anchor) at the block under your crosshair")
@@ -361,7 +361,7 @@ public class FieldwrightModSystem : ModSystem
             .EndSub();
 
         root.BeginSub("restore")
-            .WithDesc("Swap a blueprint with its rolling backup (.bak.json). Reversible — run again to swap back.")
+            .WithDesc("Swap a blueprint with its rolling backup (.bak.json). Reversible, run again to swap back.")
             .WithArgs(parsers.Word("name"))
             .HandleWith(OnCmdRestore)
             .EndSub();
@@ -489,7 +489,7 @@ public class FieldwrightModSystem : ModSystem
             schematic.AddArea(capi.World, min, endExclusive);
             schematic.Pack(capi.World, min);
 
-            // Auto-backup the existing file before overwrite — single rolling backup
+            // Auto-backup the existing file before overwrite, single rolling backup
             // at {name}.bak.json so one accidental overwrite is recoverable.
             string? backupPath = null;
             if (willOverwrite)
@@ -509,10 +509,10 @@ public class FieldwrightModSystem : ModSystem
             ClearHighlight();
 
             var overwriteNote = backupPath != null
-                ? $" (overwrote — previous version backed up to {System.IO.Path.GetFileName(backupPath)})"
+                ? $" (overwrote, previous version backed up to {System.IO.Path.GetFileName(backupPath)})"
                 : string.Empty;
             return TextCommandResult.Success(
-                $"[Fieldwright] Saved '{name}' — {dx}×{dy}×{dz} bounds, {totalBlocks} non-air block positions, anchor offset ({anchorOffset.X},{anchorOffset.Y},{anchorOffset.Z}).{overwriteNote} Selection cleared.");
+                $"[Fieldwright] Saved '{name}', {dx}×{dy}×{dz} bounds, {totalBlocks} non-air block positions, anchor offset ({anchorOffset.X},{anchorOffset.Y},{anchorOffset.Z}).{overwriteNote} Selection cleared.");
         }
         catch (System.Exception ex)
         {
@@ -612,7 +612,7 @@ public class FieldwrightModSystem : ModSystem
     }
 
     /// <summary>
-    /// "Stop everything" — dismiss any active ghost AND clear the current selection box.
+    /// "Stop everything", dismiss any active ghost AND clear the current selection box.
     /// Combined intentionally: from a player's perspective both are "I'm done with this
     /// Fieldwright operation". `.fw clear` stays as the selection-only escape hatch for
     /// users who want granularity.
@@ -704,21 +704,21 @@ public class FieldwrightModSystem : ModSystem
             var o = activeGhostRenderer.Origin;
             capi.ShowChatMessage(
                 $"[Fieldwright] Ghost '{activeGhostName}' placed at ({o.X}, {o.Y}, {o.Z}). " +
-                $"Build to match — checklist HUD opened (Ctrl+Shift+L toggles).");
+                $"Build to match, checklist HUD opened (Ctrl+Shift+L toggles).");
         }
         else
         {
             activeGhostRenderer.Unplace();
             TearDownTracking();
             capi.ShowChatMessage(
-                $"[Fieldwright] Ghost '{activeGhostName}' unlocked — back to floating. Aim to reposition, Ctrl+Shift+P to relock.");
+                $"[Fieldwright] Ghost '{activeGhostName}' unlocked, back to floating. Aim to reposition, Ctrl+Shift+P to relock.");
         }
     }
 
     /// <summary>
     /// Cycle the active ghost's mirror axis (None → X → Y → Z → None). If the ghost
     /// is already placed, the tracker is rebuilt so expected positions follow the new
-    /// mirror — pre-existing matches are recomputed via the tracker's InitialScan.
+    /// mirror, pre-existing matches are recomputed via the tracker's InitialScan.
     /// </summary>
     private void CycleGhostMirror()
     {
@@ -726,7 +726,7 @@ public class FieldwrightModSystem : ModSystem
 
         if (activeGhostRenderer == null)
         {
-            capi.ShowChatMessage("[Fieldwright] No active ghost — load a blueprint with .fw paste first.");
+            capi.ShowChatMessage("[Fieldwright] No active ghost, load a blueprint with .fw paste first.");
             return;
         }
 
@@ -822,7 +822,7 @@ public class FieldwrightModSystem : ModSystem
     /// <summary>
     /// Persist a new default matching mode to ModConfig/Fieldwright.json so it survives
     /// across sessions. Called by the library dialog when the user picks a mode from the
-    /// dropdown — the in-memory config also updates so subsequent .fw paste calls without
+    /// dropdown, the in-memory config also updates so subsequent .fw paste calls without
     /// an explicit mode use the new default.
     /// </summary>
     public void SetDefaultMatchingMode(MatchingMode mode)
@@ -896,7 +896,7 @@ public class FieldwrightModSystem : ModSystem
 
         if (now - completionDetectedAtMs >= config.AutoDismissMs)
         {
-            capi.ShowChatMessage($"[Fieldwright] Build complete — '{activeGhostName}' dismissed.");
+            capi.ShowChatMessage($"[Fieldwright] Build complete, '{activeGhostName}' dismissed.");
             ClearActiveGhost();
         }
     }
@@ -905,7 +905,7 @@ public class FieldwrightModSystem : ModSystem
     {
         if (capi == null || activeChecklistDialog == null)
         {
-            capi?.ShowChatMessage("[Fieldwright] No active checklist — place a ghost first.");
+            capi?.ShowChatMessage("[Fieldwright] No active checklist, place a ghost first.");
             return;
         }
 
