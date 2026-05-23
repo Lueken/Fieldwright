@@ -15,7 +15,7 @@ namespace Fieldwright;
 /// World positions are computed once at construction using the same Y rotation
 /// increment as the renderer, so events on those positions are O(1) to check.
 ///
-/// Phase 3a: chiseled-block matching is NOT performed yet — chisel positions
+/// Phase 3a: chiseled-block matching is NOT performed yet, chisel positions
 /// are added to the expected map with their default block code and will match
 /// when a player places a generic chiseled block of the right substrate. Strict
 /// voxel comparison is Phase 4.
@@ -35,14 +35,14 @@ public class GhostMatchTracker : IDisposable
     /// <summary>
     /// cell world pos → expected block GROUP KEY (block.FirstCodePart()).
     /// Group-key matching means "any thatch roof variant satisfies any thatch roof
-    /// cell" — consistent with the checklist HUD's row grouping. Strict per-variant
+    /// cell", consistent with the checklist HUD's row grouping. Strict per-variant
     /// matching was over-fussy for auto-orienting blocks (logs, slanted roofs, hay
     /// bales) where the variant is picked by the engine based on placement context
     /// and ghost rotation, not directly by the player.
     /// </summary>
     private readonly Dictionary<BlockPos, string> expected = new();
 
-    /// <summary>Display label per expected position — always FirstCodePart so the HUD shows
+    /// <summary>Display label per expected position, always FirstCodePart so the HUD shows
     /// clean names ("cobble", "slantedroofing") regardless of which matching mode is enforcing
     /// behind the scenes. The variant detail stays in <see cref="expected"/> for match checks.</summary>
     private readonly Dictionary<BlockPos, string> expectedDisplay = new();
@@ -62,7 +62,7 @@ public class GhostMatchTracker : IDisposable
     private readonly HashSet<BlockPos> airViolations = new();
 
     /// <summary>cells that expect a specific block but currently have the wrong (non-air) block.
-    /// Same UX as airViolations from the player's perspective — they need to remove the block
+    /// Same UX as airViolations from the player's perspective, they need to remove the block
     /// before the cell can be matched. Highlighted in the same red overlay.</summary>
     private readonly HashSet<BlockPos> wrongBlockViolations = new();
 
@@ -151,7 +151,7 @@ public class GhostMatchTracker : IDisposable
         // Air-positions live in EmptyAirBlocks if the schematic stored them.
         // Some serializations omit this; in that case air verification is a no-op.
         // We compute all cells inside the bounding box and subtract the block-bearing
-        // ones — anything left over is implicit air that must stay air. Multiblock
+        // ones, anything left over is implicit air that must stay air. Multiblock
         // secondary cells are excluded too (they'll fill in when the primary block
         // is placed and shouldn't be flagged as violations).
         for (int x = 0; x < schematic.SizeX; x++)
@@ -255,7 +255,7 @@ public class GhostMatchTracker : IDisposable
     }
 
     /// <summary>
-    /// Display label for the HUD — always FirstCodePart so player-facing rows are clean
+    /// Display label for the HUD, always FirstCodePart so player-facing rows are clean
     /// ("cobble", "log", "slantedroofing") regardless of matching mode. Variant detail
     /// lives only in the GroupKey used for backend match checks.
     /// </summary>
@@ -363,7 +363,7 @@ public class GhostMatchTracker : IDisposable
     /// can locate them in 3D, not just see a count in the HUD. Covers both:
     ///   - airViolations: cell should be air but has a non-air block
     ///   - wrongBlockViolations: cell has a block of the wrong type for that ghost cell
-    /// From the player's perspective the action is the same — remove the block.
+    /// From the player's perspective the action is the same, remove the block.
     /// Red at alpha 40 vs the green selection box at alpha 60 keeps the two visually distinct.
     /// </summary>
     private void RefreshAirViolationHighlight()

@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file. Format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.1.1] — 2026-05-20
+## [0.1.2] - 2026-05-23
+
+Hotfix for a save crash reported by multiple users on the ModDB page (SimonBBallin, Sir_Capon).
+
+### Fixed
+- **Save no longer crashes with `NullReferenceException` when the selection contains entities.** The vanilla `BlockSchematic.AddArea` captures every entity in the region (mobs, dropped items, falling blocks, projectiles) and runs `Entity.OnStoreCollectibleMappings` on each, which NREs for any entity with a null collectible reference. New `BlueprintStore.CaptureBlocksOnly` method builds the schematic from blocks only, bypassing `AddArea` entirely. Block entities (chest contents, sign text, chisel voxel data) are also skipped for now; they aren't read by any v0.1.x feature. Per-cell block-entity capture with proper try/catch returns when Phase 4 chisel overlay needs it.
+
+[0.1.2]: https://github.com/Lueken/Fieldwright/releases/tag/v0.1.2
+
+## [0.1.1] - 2026-05-20
 
 The "polish + power-user" release. Adds the schematic library UI, three matching modes, a 3-axis mirror, layer-by-layer view, in-world red highlights for blocks that need to be cleared, plus a mod config file with user-tunable knobs.
 

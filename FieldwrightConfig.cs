@@ -11,7 +11,7 @@ namespace Fieldwright;
 /// </summary>
 public enum MatchingMode
 {
-    /// <summary>block.FirstCodePart() only — "any cobble for any cobble".</summary>
+    /// <summary>block.FirstCodePart() only, "any cobble for any cobble".</summary>
     Loose,
 
     /// <summary>VS Variant API, stripping rotation/facing/orientation variants only.
@@ -77,7 +77,7 @@ public class FieldwrightConfig
             {
                 api.StoreModConfig(config, filename);
                 FieldwrightLogger.Info(api, "config",
-                    $"created default config at ModConfig/{filename} — edit to customize.");
+                    $"created default config at ModConfig/{filename}, edit to customize.");
             }
             catch (Exception ex)
             {

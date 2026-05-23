@@ -14,7 +14,7 @@ public class GhostMesh : IDisposable
 {
     private const string Component = "ghost-mesh";
 
-    // BlockSchematic position bit-packing — see BlockSchematic.PosBitMask + Pack().
+    // BlockSchematic position bit-packing, see BlockSchematic.PosBitMask + Pack().
     private const uint PosBitMask = 0x3ff;
 
     private readonly ICoreClientAPI capi;
@@ -135,7 +135,7 @@ public class GhostMesh : IDisposable
 
         if (uploadedLayers == 0)
         {
-            FieldwrightLogger.Warn(capi, Component, "ghost mesh has zero vertices — nothing to render");
+            FieldwrightLogger.Warn(capi, Component, "ghost mesh has zero vertices, nothing to render");
             return;
         }
 

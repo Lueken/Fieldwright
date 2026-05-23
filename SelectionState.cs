@@ -18,7 +18,7 @@ public class SelectionState
     public bool HasSelection => Anchor != null && Min != null && Max != null;
 
     /// <summary>
-    /// Set corner 1 — the placement anchor. Resets the box to a 1×1×1 cube at this position.
+    /// Set corner 1, the placement anchor. Resets the box to a 1×1×1 cube at this position.
     /// The face param records which face of the anchor block was player-facing when captured;
     /// this drives auto-rotate on paste so the saved face aligns with the paste-time face.
     /// </summary>
@@ -112,7 +112,7 @@ public class SelectionState
     }
 
     /// <summary>
-    /// Returns the anchor's offset from Min — used as anchorOffset in the saved blueprint.
+    /// Returns the anchor's offset from Min, used as anchorOffset in the saved blueprint.
     /// </summary>
     public Vec3i GetAnchorOffsetFromMin()
     {

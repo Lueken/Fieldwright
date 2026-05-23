@@ -62,20 +62,20 @@ If you need to reposition mid-build, press **Ctrl+Shift+P** again to unlock. The
 |---|---|---|
 | Set corner 1 (placement anchor) | `Ctrl+Shift+B` | `.fw corner1` |
 | Set corner 2 | `Ctrl+Shift+N` | `.fw corner2` |
-| Grow selection on a face | — | `.fw grow <up\|down\|north\|south\|east\|west> [n]` |
-| Shrink selection on a face | — | `.fw shrink <up\|down\|north\|south\|east\|west> [n]` |
-| Show selection status | — | `.fw status` |
-| Clear selection only | — | `.fw clear` |
-| Save selection as blueprint | — | `.fw save <name> [overwrite]` |
-| List saved blueprints (text) | — | `.fw list` |
+| Grow selection on a face | | `.fw grow <up\|down\|north\|south\|east\|west> [n]` |
+| Shrink selection on a face | | `.fw shrink <up\|down\|north\|south\|east\|west> [n]` |
+| Show selection status | | `.fw status` |
+| Clear selection only | | `.fw clear` |
+| Save selection as blueprint | | `.fw save <name> [overwrite]` |
+| List saved blueprints (text) | | `.fw list` |
 | Open the blueprint library UI | `Ctrl+Shift+K` | `.fw library` |
-| Paste a blueprint (floating ghost) | — | `.fw paste <name> [loose\|medium\|strict]` |
+| Paste a blueprint (floating ghost) | | `.fw paste <name> [loose\|medium\|strict]` |
 | Toggle place / unlock ghost | `Ctrl+Shift+P` | `.fw place` |
 | Cycle ghost mirror axis | `Ctrl+Shift+M` | `.fw mirror` |
-| Restore/peel ghost layers | `PgUp` / `PgDn` | — |
-| Toggle checklist HUD | `Ctrl+Shift+L` | — |
+| Restore/peel ghost layers | `PgUp` / `PgDn` | |
+| Toggle checklist HUD | `Ctrl+Shift+L` | |
 | Cancel: dismiss ghost + clear selection | `Ctrl+Shift+X` | `.fw cancel` |
-| Restore a blueprint from its rolling backup | — | `.fw restore <name>` |
+| Restore a blueprint from its rolling backup | | `.fw restore <name>` |
 
 Hotkeys are rebindable in **Settings → Controls → Mod controls** under "Fieldwright".
 
@@ -132,7 +132,7 @@ Build output lands in `bin/Debug/Mods/`. Copy the `Fieldwright.dll` and `modinfo
 
 - **v0.1.0** (shipped 2026-05-18): selection, save/load, ghost, snap-to-look, match tracking, checklist HUD.
 - **v0.1.1** (current): library UI, layer view, 3-axis mirror, three matching modes, red highlights for blocks to clear, mod config file, `.fw restore`, combined cancel hotkey.
-- **v0.2.0 candidate** (pick one): Phase 4 chisel voxel overlay OR Phase 3b in-game handbook tab. Phase 4 is the unique differentiator; Phase 3b is the more visible polish.
+- **v0.2.0 headline**: Phase 4 chisel voxel overlay. Per-voxel red/green/yellow hints on chiseled positions plus proper schematic-transform rotation so block variants rotate correctly with the ghost.
 - **Smaller backlog**: localization scaffold, modicon.png replacing the ModDB default, multiple named active ghosts simultaneously.
 
 ---
@@ -150,6 +150,6 @@ Bug reports and pull requests welcome at [github.com/Lueken/Fieldwright/issues](
 
 ## License
 
-Code is MIT licensed — see [LICENSE](LICENSE). Blueprint JSON files saved by users are user-owned and outside the mod's licensing scope.
+Code is MIT licensed. See [LICENSE](LICENSE). Blueprint JSON files saved by users are user-owned and outside the mod's licensing scope.
 
 Authored by Venah (`Lueken` on GitHub).
