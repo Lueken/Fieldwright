@@ -9,7 +9,7 @@ using Vintagestory.API.Util;
 [assembly: ModInfo("Fieldwright", "fieldwright",
     Authors = new string[] { "Venah" },
     Description = "A surveyor's pocket aid for builders. Client-side personal blueprint mod with anchor-snap paste.",
-    Version = "0.1.2-dev")]
+    Version = "0.1.2")]
 
 namespace Fieldwright;
 
@@ -64,7 +64,7 @@ public class FieldwrightModSystem : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         capi = api;
-        FieldwrightLogger.Info(api, Component, "loading Fieldwright v0.1.2-dev");
+        FieldwrightLogger.Info(api, Component, "loading Fieldwright v0.1.2");
 
         config = FieldwrightConfig.Load(api);
         activeMatchingMode = config.DefaultMatchingMode;
@@ -479,15 +479,15 @@ public class FieldwrightModSystem : ModSystem
             var max = selection.Max!;
             var anchorOffset = selection.GetAnchorOffsetFromMin();
 
-            // BlockSchematic.AddArea uses a strict-less-than loop on the end coord,
-            // so we have to pass max + (1,1,1) to capture the user's chosen max
-            // block inclusively. Without this shift, single-Y selections capture 0
-            // blocks because the Y loop runs zero times.
+            // BlockSchematic.AddArea has a strict-less-than loop on the end coord,
+            // so we pass max + (1,1,1) to capture the user's chosen max block inclusively.
             var endExclusive = new BlockPos(max.X + 1, max.Y + 1, max.Z + 1, max.dimension);
 
-            var schematic = new BlockSchematic();
-            schematic.AddArea(capi.World, min, endExclusive);
-            schematic.Pack(capi.World, min);
+            // v0.1.2: bypass BlockSchematic.AddArea because it captures entities
+            // (mobs, dropped items, falling blocks) and runs Entity.OnStoreCollectibleMappings
+            // on each, which NREs for some entities with null collectible refs. The
+            // build-along workflow doesn't need entity state, so we capture blocks only.
+            var schematic = BlueprintStore.CaptureBlocksOnly(capi.World, min, endExclusive);
 
             // Auto-backup the existing file before overwrite, single rolling backup
             // at {name}.bak.json so one accidental overwrite is recoverable.

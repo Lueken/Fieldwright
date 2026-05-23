@@ -33,6 +33,75 @@ public static class BlueprintStore
     private const string Component = "store";
     private const string BlueprintsFolderName = "Blueprints";
 
+    // Position bit-packing convention used by BlockSchematic.Indices.
+    // Matches PosBitMask = 0x3ff (10 bits per axis); same layout used by
+    // GhostMesh.cs and GhostMatchTracker.cs.
+    private const uint PosBitMask = 0x3ff;
+
+    /// <summary>
+    /// Build a BlockSchematic from a region without using BlockSchematic.AddArea.
+    /// The vanilla AddArea captures every entity in the region (mobs, dropped items,
+    /// falling blocks, projectiles) and calls Entity.OnStoreCollectibleMappings on each
+    /// to remap block/item references. Some entities (modded or vanilla) have null
+    /// collectible attributes and trigger a NullReferenceException, killing the entire
+    /// save. We don't need entity state for the build-along workflow today, so we skip
+    /// entities entirely. Block entities (chest contents, sign text, chiseled voxels)
+    /// are also skipped for v0.1.2 because they're not used yet either; future Phase 4
+    /// chisel work will add per-cell BE capture with proper try/catch.
+    ///
+    /// Bounds are start-inclusive, endExclusive-exclusive — same convention as
+    /// BlockSchematic.AddArea, so callers can pass max + (1,1,1) the same way.
+    /// </summary>
+    public static BlockSchematic CaptureBlocksOnly(IWorldAccessor world, BlockPos min, BlockPos endExclusive)
+    {
+        var schematic = new BlockSchematic();
+        var ba = world.BlockAccessor;
+
+        int sizeX = endExclusive.X - min.X;
+        int sizeY = endExclusive.Y - min.Y;
+        int sizeZ = endExclusive.Z - min.Z;
+
+        schematic.SizeX = sizeX;
+        schematic.SizeY = sizeY;
+        schematic.SizeZ = sizeZ;
+
+        var codeToId = new Dictionary<string, int>();
+        var blockCodes = new Dictionary<int, AssetLocation>();
+        var blockIds = new List<int>();
+        var indices = new List<uint>();
+        int nextId = 1;
+
+        for (int dy = 0; dy < sizeY; dy++)
+        {
+            for (int dz = 0; dz < sizeZ; dz++)
+            {
+                for (int dx = 0; dx < sizeX; dx++)
+                {
+                    var pos = new BlockPos(min.X + dx, min.Y + dy, min.Z + dz, min.dimension);
+                    var block = ba.GetBlock(pos);
+                    if (block == null || block.Id == 0 || block.Code == null) continue;
+
+                    var codeStr = block.Code.ToString();
+                    if (!codeToId.TryGetValue(codeStr, out int storedId))
+                    {
+                        storedId = nextId++;
+                        codeToId[codeStr] = storedId;
+                        blockCodes[storedId] = block.Code;
+                    }
+
+                    blockIds.Add(storedId);
+                    uint packed = (uint)dx | ((uint)dz << 10) | ((uint)dy << 20);
+                    indices.Add(packed);
+                }
+            }
+        }
+
+        schematic.BlockCodes = blockCodes;
+        schematic.BlockIds = blockIds;
+        schematic.Indices = indices;
+        return schematic;
+    }
+
     public static string GetBlueprintsDirectory(ICoreAPI api)
     {
         var dir = Path.Combine(GamePaths.DataPath, BlueprintsFolderName);
