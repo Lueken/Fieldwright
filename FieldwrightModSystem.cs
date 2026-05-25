@@ -555,8 +555,18 @@ public class FieldwrightModSystem : ModSystem
             var blueprint = BlueprintStore.Load(capi, name);
             var schematic = blueprint.ToBlockSchematic();
 
-            schematic.Init(capi.World.BlockAccessor);
-            schematic.LoadMetaInformationAndValidate(capi.World.BlockAccessor, capi.World, name);
+            // Don't call schematic.Init() / LoadMetaInformationAndValidate() here.
+            // Init() → Remap() iterates BlockSchematic.BlockRemaps, a static populated
+            // by ServerSystemRemapperAssistant. That assistant only runs on the server
+            // process; on a client connected to a dedicated server it never fires, so
+            // the static stays null and the foreach NREs ("Object reference not set to
+            // an instance of an object" on every paste in multiplayer). Singleplayer
+            // works only because the integrated server shares the client's process.
+            // We don't need cross-version remapping for a same-session preview, and
+            // LoadMetaInformationAndValidate only logs missing-block warnings and
+            // computes pathway/underground/aboveground hints used by worldgen — none
+            // of which Fieldwright reads. GhostMesh and GhostMatchTracker resolve
+            // blocks via capi.World.GetBlock(assetLoc) directly and skip nulls.
 
             var anchorOffset = blueprint.AnchorOffsetAsVec3i();
             var savedFace = blueprint.AnchorFacingResolved();

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3] - 2026-05-25
+
+Hotfix for a multiplayer load crash reported by PhallicYam on the ModDB page.
+
+### Fixed
+- **Paste no longer crashes with `NullReferenceException` when loading a blueprint while connected to a dedicated multiplayer server.** The previous load path called `BlockSchematic.Init()`, which calls `Remap()`, which iterates `BlockSchematic.BlockRemaps`. That static is populated by VS's `ServerSystemRemapperAssistant`, a `ServerSystem` that only runs in the server process. On a client joined to a dedicated server it never fires, so `BlockRemaps` stays null and the `foreach` NREs. Singleplayer worked only by accident because the integrated server shares the client's process. Fix: skip `Init()` and `LoadMetaInformationAndValidate()` entirely. We don't need cross-version block remapping for a same-session ghost preview, and the meta-validation step only logs missing-block warnings plus computes worldgen pathway hints that Fieldwright never reads. `GhostMesh` and `GhostMatchTracker` already resolve blocks directly via `capi.World.GetBlock(assetLoc)` and skip nulls, so behavior is preserved. Affects all prior versions (0.1.0 – 0.1.2); the saved-blueprint version is irrelevant.
+
+[0.1.3]: https://github.com/Lueken/Fieldwright/releases/tag/v0.1.3
+
 ## [0.1.2] - 2026-05-23
 
 Hotfix for a save crash reported by multiple users on the ModDB page (SimonBBallin, Sir_Capon).
