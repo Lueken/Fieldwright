@@ -1,7 +1,10 @@
 using System;
+using System.IO;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Util;
 
 namespace Fieldwright;
 
@@ -94,19 +97,7 @@ public class GhostMesh : IDisposable
                 continue;
             }
 
-            MeshData blockMesh;
-            try
-            {
-                capi.Tesselator.TesselateBlock(block, out blockMesh);
-            }
-            catch (Exception ex)
-            {
-                FieldwrightLogger.Warn(capi, Component,
-                    $"failed to tessellate {assetLoc}: {ex.Message}");
-                skipped++;
-                continue;
-            }
-
+            var blockMesh = BuildCellMesh(block, schematic, encoded);
             if (blockMesh == null || blockMesh.VerticesCount == 0)
             {
                 skipped++;
@@ -142,6 +133,78 @@ public class GhostMesh : IDisposable
         FieldwrightLogger.Info(capi, Component,
             $"built ghost mesh: {built} blocks, {skipped} skipped across {uploadedLayers} non-empty Y layers, " +
             $"size {Size.X}×{Size.Y}×{Size.Z}");
+    }
+
+    /// <summary>
+    /// Resolve the mesh for one cell. The pipeline is:
+    ///   1. If a BEMeshSource handles this block family, let it provide the mesh
+    ///      (chest meshAngle, crate from temp BE, chisel substrate, ...).
+    ///   2. Else fall back to the engine's bare TesselateBlock, which is correct
+    ///      for ordinary blocks (planks, doors, slanted roofing, stairs).
+    /// Source.Provide returning null is treated as "I don't handle this", so the
+    /// caller falls through to the default tessellation rather than skipping the
+    /// cell, e.g. when chisel BE data is missing on a fallback-saved blueprint.
+    /// </summary>
+    private MeshData? BuildCellMesh(Block block, BlockSchematic schematic, uint encoded)
+    {
+        var path = block.Code?.Path;
+        var source = path != null ? BEMeshSourceRegistry.Lookup(path) : null;
+
+        ITreeAttribute? beTree = null;
+        if (schematic.BlockEntities.TryGetValue(encoded, out var ascii85))
+        {
+            beTree = DecodeBETree(ascii85);
+        }
+
+        if (source != null)
+        {
+            try
+            {
+                var fromSource = source.Provide(capi, block, beTree);
+                if (fromSource != null && fromSource.VerticesCount > 0) return fromSource;
+            }
+            catch (Exception ex)
+            {
+                FieldwrightLogger.Warn(capi, Component,
+                    $"BE mesh source '{source.Prefix}' threw on {block.Code}: {ex.GetType().Name}: {ex.Message}");
+                // Fall through to default tessellation.
+            }
+        }
+
+        try
+        {
+            capi.Tesselator.TesselateBlock(block, out var mesh);
+            return mesh;
+        }
+        catch (Exception ex)
+        {
+            FieldwrightLogger.Warn(capi, Component,
+                $"failed to tessellate {block.Code}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Decode an Ascii85-encoded TreeAttribute payload from BlockSchematic.BlockEntities.
+    /// Returns null on any decoding failure so callers can skip the cell silently rather
+    /// than killing the whole ghost build.
+    /// </summary>
+    private ITreeAttribute? DecodeBETree(string ascii85)
+    {
+        try
+        {
+            byte[] bytes = Ascii85.Decode(ascii85);
+            var tree = new TreeAttribute();
+            using var ms = new MemoryStream(bytes);
+            using var br = new BinaryReader(ms);
+            tree.FromBytes(br);
+            return tree;
+        }
+        catch (Exception ex)
+        {
+            FieldwrightLogger.Warn(capi, Component, $"failed to decode BE tree: {ex.Message}");
+            return null;
+        }
     }
 
     private static void ApplyAlpha(MeshData mesh, byte alphaByte)

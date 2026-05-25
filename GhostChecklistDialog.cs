@@ -1,80 +1,116 @@
-using System.Collections.Generic;
-using System.Text;
 using Vintagestory.API.Client;
-using Vintagestory.API.Common;
-using Vintagestory.API.Config;
 
 namespace Fieldwright;
 
 /// <summary>
-/// HUD overlay showing the active ghost's build progress. Inherits from HudElement
-/// so it doesn't grab focus / lock the cursor. Top-left, compact, semi-transparent.
+/// Movable, scrollable dialog showing the active ghost's build progress. Replaces the
+/// always-visible HUD overlay. Toggled with Ctrl+Shift+L (or the build-checklist hotkey),
+/// the player opens it to check progress / drag it somewhere convenient / copy the list
+/// to clipboard, then closes it to keep building with cursor grabbed.
 ///
-/// Materials are grouped by block.FirstCodePart(), e.g., all variants of slanted
-/// roofing share one row. Coarser than per-variant tracking but matches builder
-/// intuition ("how many of THIS thing do I need").
+/// Materials are grouped by block.FirstCodePart(), e.g. all variants of slanted roofing
+/// share one row. Chiseled cells contribute to their substrate's row (oak plank etc.)
+/// so phase-1 build counts are accurate without needing to think about chisel detail.
 /// </summary>
-public class GhostChecklistDialog : HudElement
+public class GhostChecklistDialog : GuiDialog
 {
-    private const string Component = "checklist-hud";
-    private const int MaxRows = 12;
+    private const string Component = "checklist-ui";
+    private const string ComposerKey = "fieldwright-checklist";
+
+    // Dialog geometry. Width is comfortable for material names + counts.
+    // Body height covers about 20 rows before scrolling kicks in.
+    private const int DialogWidth = 320;
+    private const int BodyHeight = 360;
+    private const int TitleBarPad = 18;
+    private const int ScrollbarWidth = 20;
+    private const int FooterHeight = 44;
+    private const int RowFontSize = 14;
 
     private readonly GhostMatchTracker tracker;
     private readonly string blueprintName;
-    private readonly int hudOffsetX;
-    private readonly int hudOffsetY;
+    private readonly int initialOffsetX;
+    private readonly int initialOffsetY;
 
-    // Lean on HudElement defaults for input behavior. Those defaults (null toggle
-    // code, PrefersUngrabbedMouse=false, mouse-look stays grabbed) match the
-    // vanilla boss-health-bar pattern. Earlier overrides of PrefersUngrabbedMouse
-    // and DisableMouseGrab were releasing the cursor on open, which broke camera
-    // look. Only override what's needed to make the dialog non-interactive.
-    public override double DrawOrder => 0.2;
-    public override bool Focusable => false;
-    public override bool ShouldReceiveKeyboardEvents() => false;
+    // Latest known content height in pixels so the scrollbar can scale. Updated
+    // every time the body text rebuilds. Zero means "no content yet".
+    private float currentContentHeight;
 
-    public override void OnMouseDown(MouseEvent args) { /* HUD is non-interactive. Let the game handle clicks */ }
-    public override void OnMouseUp(MouseEvent args) { }
-    public override void OnMouseMove(MouseEvent args) { }
-    protected override void OnFocusChanged(bool on) { }
+    // Latest scroll value (0 = top), echoed into the body's fixedY offset every
+    // time the scrollbar moves so the clip window pans over the text.
+    private float currentScroll;
 
-    public GhostChecklistDialog(ICoreClientAPI capi, GhostMatchTracker tracker, string blueprintName, int hudOffsetX, int hudOffsetY) : base(capi)
+    public override string? ToggleKeyCombinationCode => null;
+    public override double DrawOrder => 0.25;
+
+    public GhostChecklistDialog(ICoreClientAPI capi, GhostMatchTracker tracker,
+        string blueprintName, int hudOffsetX, int hudOffsetY) : base(capi)
     {
         this.tracker = tracker;
         this.blueprintName = blueprintName;
-        this.hudOffsetX = hudOffsetX;
-        this.hudOffsetY = hudOffsetY;
+        this.initialOffsetX = hudOffsetX;
+        this.initialOffsetY = hudOffsetY;
         Compose();
-        FieldwrightLogger.Info(capi, Component, $"checklist HUD opened for '{blueprintName}' at ({hudOffsetX},{hudOffsetY})");
+        FieldwrightLogger.Info(capi, Component,
+            $"checklist dialog ready for '{blueprintName}' at ({hudOffsetX},{hudOffsetY})");
     }
 
     private void Compose()
     {
-        // Compact panel, ~260px wide. RichText handles VTML markup
-        // (<font color>...) so we get inline color-coding for free.
-        // Offset is configurable so users can move the HUD via Fieldwright.json.
-        var dialogBounds = ElementBounds.Fixed(hudOffsetX, hudOffsetY, 260, 280)
-            .WithAlignment(EnumDialogArea.LeftTop);
+        // Discard any prior composer to avoid the Cairo blur crash that hits when the
+        // title bar re-renders on a reused composer (same gotcha as SchematicLibraryDialog).
+        Composers[ComposerKey]?.Dispose();
 
-        var bgBounds = ElementBounds.Fill.WithFixedPadding(8);
+        // Dialog positioned at the configured corner offset on first open. After the
+        // player drags the title bar, VS updates dialogBounds.fixedX/Y itself; we don't
+        // need to track or persist the drag for v0.1.3.
+        var dialogBounds = ElementStdBounds.AutosizedMainDialog
+            .WithAlignment(EnumDialogArea.LeftTop)
+            .WithFixedAlignmentOffset(initialOffsetX, initialOffsetY);
+
+        var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
         bgBounds.BothSizing = ElementSizing.FitToChildren;
-        bgBounds.WithChildren(dialogBounds);
 
-        var titleFont = CairoFont.WhiteDetailText();
+        int totalH = TitleBarPad + BodyHeight + FooterHeight;
+        var contentBounds = ElementBounds.Fixed(0, 0, DialogWidth, totalH);
+        bgBounds.WithChildren(contentBounds);
+
+        // Body: a clipped view onto a tall Richtext element. The clipping bounds set
+        // the visible window; the Richtext can extend below for scroll. Scrollbar
+        // lives to the right of the clip, fixed-width.
+        int bodyY = TitleBarPad + 4;
+        var clipBounds = ElementBounds.Fixed(0, bodyY, DialogWidth - ScrollbarWidth - 4, BodyHeight);
+        var insideClipBounds = ElementBounds.Fixed(0, 0, DialogWidth - ScrollbarWidth - 8, BodyHeight)
+            .WithFixedPadding(0, 0);
+        var scrollbarBounds = ElementBounds.Fixed(DialogWidth - ScrollbarWidth, bodyY,
+            ScrollbarWidth, BodyHeight);
+
+        int footerY = bodyY + BodyHeight + 8;
+        var copyBtnBounds = ElementBounds.Fixed(0, footerY, 110, 30);
+        var hintBounds = ElementBounds.Fixed(120, footerY + 6, DialogWidth - 130, 24);
+
         var bodyFont = CairoFont.WhiteSmallText();
 
-        // No AddDialogBG → fully transparent backdrop. Text renders directly. If
-        // legibility suffers against bright skies, swap in AddInset for a faint
-        // dark wash. (AddShadedDialogBG is too opaque per user feedback.)
-        Composers["fieldwright-checklist"] =
-            capi.Gui.CreateCompo("fieldwright-checklist", bgBounds)
-                .BeginChildElements(dialogBounds)
-                    .AddStaticText($"Fieldwright: {blueprintName}", titleFont,
-                        ElementBounds.Fixed(0, 0, 240, 20))
-                    .AddRichtext("", bodyFont,
-                        ElementBounds.Fixed(0, 24, 240, 256), "body")
-                .EndChildElements()
-                .Compose();
+        var composer = capi.Gui.CreateCompo(ComposerKey, dialogBounds)
+            .AddShadedDialogBG(bgBounds)
+            .AddDialogTitleBar($"Fieldwright: {blueprintName}", OnTitleBarClose)
+            .BeginChildElements(contentBounds)
+                .BeginClip(clipBounds)
+                    .AddRichtext("", bodyFont, insideClipBounds, "body")
+                .EndClip()
+                .AddVerticalScrollbar(OnScroll, scrollbarBounds, "scroll")
+                .AddSmallButton("Copy to clipboard", OnCopyClicked, copyBtnBounds,
+                    EnumButtonStyle.Normal, "copyBtn")
+                .AddStaticText("Drag title to move", CairoFont.WhiteDetailText(),
+                    hintBounds)
+            .EndChildElements()
+            .Compose();
+
+        Composers[ComposerKey] = composer;
+
+        // Initial scroll state. Sizes get refined the first time UpdateText runs and
+        // we know the real Richtext height.
+        var scrollbar = composer.GetScrollbar("scroll");
+        scrollbar?.SetHeights(BodyHeight, BodyHeight);
     }
 
     public override void OnRenderGUI(float deltaTime)
@@ -85,61 +121,49 @@ public class GhostChecklistDialog : HudElement
 
     private void UpdateText()
     {
-        var rich = Composers["fieldwright-checklist"]?.GetRichtext("body");
+        var composer = Composers[ComposerKey];
+        var rich = composer?.GetRichtext("body");
         if (rich == null) return;
 
-        var sb = new StringBuilder();
+        var (vtml, _) = GhostChecklistText.Build(tracker);
+        rich.SetNewText(vtml, CairoFont.WhiteSmallText());
 
-        // Progress summary. Done cells = matched block-bearing positions + air positions that
-        // are actually empty. Wrong-block cells count as "not done" against the block total
-        // (they're occupying a position but with the wrong block).
-        int totalCells = tracker.TotalBlockCells + tracker.TotalAirCells;
-        int doneCells = tracker.MatchedBlocks + (tracker.TotalAirCells - tracker.AirViolationCount);
-        float pct = totalCells > 0 ? (doneCells * 100f / totalCells) : 100f;
-        sb.AppendLine($"<font color=\"#aaffaa\">Progress: {doneCells} / {totalCells} ({pct:F0}%)</font>");
-
-        // Tracker already aggregates by group key (e.g. "slantedroofing"), so the
-        // HUD just renders each entry directly. Inventory counts come from the
-        // tracker for the same reason. Matching and display share the group key.
-        var needs = tracker.GetMaterialNeeds();
-        if (needs.Count > 0)
+        // After SetNewText the Richtext recomputes its inner content height. Push that
+        // into the scrollbar so the thumb sizes correctly.
+        rich.Bounds.CalcWorldBounds();
+        float contentH = (float)rich.Bounds.fixedHeight;
+        if (contentH <= 0) contentH = BodyHeight;
+        if (contentH != currentContentHeight)
         {
-            sb.AppendLine();
-            sb.AppendLine($"<font color=\"#ffffff\">Materials needed:</font>");
-
-            // Sort by group name for stable display order.
-            var sorted = new List<KeyValuePair<string, int>>(needs);
-            sorted.Sort((a, b) => string.Compare(a.Key, b.Key, System.StringComparison.Ordinal));
-
-            int rowsShown = 0;
-            foreach (var kvp in sorted)
-            {
-                if (rowsShown >= MaxRows) break;
-                int have = tracker.CountInInventory(kvp.Key);
-                int need = kvp.Value;
-                string color = have >= need ? "#aaffaa" : "#ffaaaa";
-                sb.AppendLine($"<font color=\"{color}\">  {kvp.Key}: {have} / {need}</font>");
-                rowsShown++;
-            }
-            if (sorted.Count > MaxRows)
-            {
-                sb.AppendLine($"<font color=\"#aaaaaa\">  …and {sorted.Count - MaxRows} more</font>");
-            }
+            currentContentHeight = contentH;
+            var scrollbar = composer!.GetScrollbar("scroll");
+            scrollbar?.SetHeights(BodyHeight, contentH);
         }
-
-        if (tracker.BlocksToRemoveCount > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"<font color=\"#ff8888\">Blocks to remove: {tracker.BlocksToRemoveCount}</font>");
-        }
-
-        if (tracker.IsComplete)
-        {
-            sb.AppendLine();
-            sb.AppendLine("<font color=\"#aaffaa\">Structure complete!</font>");
-        }
-
-        rich.SetNewText(sb.ToString(), CairoFont.WhiteSmallText());
     }
 
+    private void OnScroll(float value)
+    {
+        currentScroll = value;
+        var body = Composers[ComposerKey]?.GetRichtext("body");
+        if (body == null) return;
+        // Scroll by translating the Richtext upward inside the clip. fixedY = -value
+        // pans the content up as the scrollbar moves down.
+        body.Bounds.fixedY = -value;
+        body.Bounds.CalcWorldBounds();
+    }
+
+    private void OnTitleBarClose()
+    {
+        TryClose();
+    }
+
+    private bool OnCopyClicked()
+    {
+        var (_, plain) = GhostChecklistText.Build(tracker);
+        var header = $"Fieldwright: {blueprintName}\n";
+        capi.Forms.SetClipboardText(header + plain);
+        FieldwrightLogger.Info(capi, Component,
+            $"copied checklist for '{blueprintName}' to clipboard ({plain.Length} chars)");
+        return true;
+    }
 }

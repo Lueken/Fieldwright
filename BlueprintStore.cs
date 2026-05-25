@@ -99,7 +99,25 @@ public static class BlueprintStore
         schematic.BlockCodes = blockCodes;
         schematic.BlockIds = blockIds;
         schematic.Indices = indices;
+        EnsureSchematicCollectionsInitialized(schematic);
         return schematic;
+    }
+
+    /// <summary>
+    /// Defensive init for every collection field on BlockSchematic that the vanilla
+    /// AddArea path populates. Without these set to empty (rather than null), the
+    /// schematic JSON round-trip can leave fields null on the loaded copy, and
+    /// BlockSchematic.Remap() inside Init() walks them without null checks and NREs.
+    /// Reported by Fish, 3CHO, and PhallicYam after v0.1.2 shipped.
+    /// </summary>
+    public static void EnsureSchematicCollectionsInitialized(BlockSchematic schematic)
+    {
+        schematic.Entities ??= new List<string>();
+        schematic.BlockEntities ??= new Dictionary<uint, string>();
+        schematic.ItemCodes ??= new Dictionary<int, AssetLocation>();
+        schematic.DecorIds ??= new List<long>();
+        schematic.EntitiesUnpacked ??= new List<Vintagestory.API.Common.Entities.Entity>();
+        schematic.BlockEntitiesUnpacked ??= new Dictionary<BlockPos, string>();
     }
 
     public static string GetBlueprintsDirectory(ICoreAPI api)

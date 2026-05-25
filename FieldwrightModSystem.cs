@@ -9,7 +9,7 @@ using Vintagestory.API.Util;
 [assembly: ModInfo("Fieldwright", "fieldwright",
     Authors = new string[] { "Venah" },
     Description = "A surveyor's pocket aid for builders. Client-side personal blueprint mod with anchor-snap paste.",
-    Version = "0.1.3-dev")]
+    Version = "0.1.3")]
 
 namespace Fieldwright;
 
@@ -47,9 +47,15 @@ public class FieldwrightModSystem : ModSystem
     /// </summary>
     private MatchingMode activeMatchingMode = MatchingMode.Loose;
 
-    // Phase 3a: match tracker + HUD created on .fw place, disposed on cancel / unlock.
+    // Phase 3a: match tracker + checklist views created on .fw place, disposed on
+    // cancel / unlock. Two view surfaces: the always-on HUD (transparent overlay, no
+    // cursor grab) and the modal dialog (movable, scrollable, copyable). Ctrl+Shift+L
+    // cycles: HUD -> Modal -> Hidden -> HUD.
     private GhostMatchTracker? activeMatchTracker;
+    private GhostChecklistHud? activeChecklistHud;
     private GhostChecklistDialog? activeChecklistDialog;
+    private enum ChecklistView { Hud = 0, Modal = 1, Hidden = 2 }
+    private ChecklistView checklistView = ChecklistView.Hud;
 
     // Auto-dismiss timer: ghost + HUD auto-clear N ms after the structure first
     // becomes fully matched. Re-arms if the player breaks a block (uncompleting it).
@@ -64,7 +70,7 @@ public class FieldwrightModSystem : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         capi = api;
-        FieldwrightLogger.Info(api, Component, "loading Fieldwright v0.1.3-dev");
+        FieldwrightLogger.Info(api, Component, "loading Fieldwright v0.1.3");
 
         config = FieldwrightConfig.Load(api);
         activeMatchingMode = config.DefaultMatchingMode;
@@ -117,11 +123,12 @@ public class FieldwrightModSystem : ModSystem
             return true;
         });
 
-        // Checklist HUD toggle, manual open/close to avoid the dialog system's
-        // interactive-toggle path (which grabs the cursor).
-        api.Input.RegisterHotKey("fieldwright-checklist-toggle", "Fieldwright: Toggle build checklist HUD",
+        // Checklist view cycle: HUD -> Modal -> Hidden -> HUD. The HUD doesn't grab
+        // the cursor (transparent always-on); the modal does (movable / scrollable /
+        // copyable). Hidden leaves nothing on screen.
+        api.Input.RegisterHotKey("fieldwright-checklist-toggle", "Fieldwright: Cycle checklist view (HUD / Modal / Hidden)",
             GlKeys.L, HotkeyType.CharacterControls, ctrlPressed: true, shiftPressed: true);
-        api.Input.SetHotKeyHandler("fieldwright-checklist-toggle", _ => { ToggleChecklistHud(); return true; });
+        api.Input.SetHotKeyHandler("fieldwright-checklist-toggle", _ => { CycleChecklistView(); return true; });
 
         FieldwrightLogger.Info(api, Component,
             "registered hotkeys Ctrl+Shift+B (corner1+anchor), Ctrl+Shift+N (corner2), Ctrl+Shift+P (place), " +
@@ -483,11 +490,27 @@ public class FieldwrightModSystem : ModSystem
             // so we pass max + (1,1,1) to capture the user's chosen max block inclusively.
             var endExclusive = new BlockPos(max.X + 1, max.Y + 1, max.Z + 1, max.dimension);
 
-            // v0.1.2: bypass BlockSchematic.AddArea because it captures entities
-            // (mobs, dropped items, falling blocks) and runs Entity.OnStoreCollectibleMappings
-            // on each, which NREs for some entities with null collectible refs. The
-            // build-along workflow doesn't need entity state, so we capture blocks only.
-            var schematic = BlueprintStore.CaptureBlocksOnly(capi.World, min, endExclusive);
+            // Try the vanilla AddArea path first. It captures full block-entity state
+            // (chest contents, chisel voxel data, askew chest meshAngle, sign text) which
+            // the ghost render depends on for proper visuals. AddArea can NRE inside
+            // Entity.OnStoreCollectibleMappings if a world entity (mob, dropped item) has
+            // a null collectible reference. When that happens, fall back to a block-only
+            // capture that bypasses the entity path entirely.
+            BlockSchematic schematic;
+            bool fellBack = false;
+            try
+            {
+                schematic = new BlockSchematic();
+                schematic.AddArea(capi.World, min, endExclusive);
+                schematic.Pack(capi.World, min);
+            }
+            catch (System.NullReferenceException)
+            {
+                FieldwrightLogger.Warn(capi, Component,
+                    "AddArea NRE (likely an entity with null collectible refs in the region); falling back to block-only capture");
+                schematic = BlueprintStore.CaptureBlocksOnly(capi.World, min, endExclusive);
+                fellBack = true;
+            }
 
             // Auto-backup the existing file before overwrite, single rolling backup
             // at {name}.bak.json so one accidental overwrite is recoverable.
@@ -511,8 +534,11 @@ public class FieldwrightModSystem : ModSystem
             var overwriteNote = backupPath != null
                 ? $" (overwrote, previous version backed up to {System.IO.Path.GetFileName(backupPath)})"
                 : string.Empty;
+            var fallbackNote = fellBack
+                ? " NOTE: an entity in the region forced a block-only fallback; block-entity state (chest contents, sign text, chisel voxel data, askew chest rotation) was not captured. Move mobs and dropped items out of the area for full fidelity."
+                : string.Empty;
             return TextCommandResult.Success(
-                $"[Fieldwright] Saved '{name}', {dx}×{dy}×{dz} bounds, {totalBlocks} non-air block positions, anchor offset ({anchorOffset.X},{anchorOffset.Y},{anchorOffset.Z}).{overwriteNote} Selection cleared.");
+                $"[Fieldwright] Saved '{name}', {dx}×{dy}×{dz} bounds, {totalBlocks} non-air block positions, anchor offset ({anchorOffset.X},{anchorOffset.Y},{anchorOffset.Z}).{overwriteNote} Selection cleared.{fallbackNote}");
         }
         catch (System.Exception ex)
         {
@@ -668,6 +694,12 @@ public class FieldwrightModSystem : ModSystem
         completionDetectedAtMs = 0;
         completionDismissNotified = false;
 
+        if (activeChecklistHud != null)
+        {
+            if (activeChecklistHud.IsOpened()) activeChecklistHud.TryClose();
+            activeChecklistHud.Dispose();
+            activeChecklistHud = null;
+        }
         if (activeChecklistDialog != null)
         {
             if (activeChecklistDialog.IsOpened()) activeChecklistDialog.TryClose();
@@ -679,6 +711,7 @@ public class FieldwrightModSystem : ModSystem
             activeMatchTracker.Dispose();
             activeMatchTracker = null;
         }
+        checklistView = ChecklistView.Hud;
     }
 
     /// <summary>
@@ -854,9 +887,15 @@ public class FieldwrightModSystem : ModSystem
             capi, activeSchematic, activeAnchorOffset, activeGhostRenderer.Origin, rot,
             activeGhostRenderer.CurrentMirror, activeMatchingMode);
 
+        // Build both views up-front so Ctrl+Shift+L can flip between them without
+        // a new construction cost mid-build. HUD opens by default; modal stays closed
+        // until the player asks for it.
+        activeChecklistHud = new GhostChecklistHud(capi, activeMatchTracker, activeGhostName,
+            config.HudOffsetX, config.HudOffsetY);
         activeChecklistDialog = new GhostChecklistDialog(capi, activeMatchTracker, activeGhostName,
             config.HudOffsetX, config.HudOffsetY);
-        activeChecklistDialog.TryOpen();
+        checklistView = ChecklistView.Hud;
+        activeChecklistHud.TryOpen();
 
         // Poll every 250ms for completion → start the dismiss timer.
         completionTickListenerId = capi.Event.RegisterGameTickListener(CheckCompletion, 250);
@@ -901,21 +940,40 @@ public class FieldwrightModSystem : ModSystem
         }
     }
 
-    private void ToggleChecklistHud()
+    /// <summary>
+    /// Cycle through the three checklist view states: HUD -> Modal -> Hidden -> HUD.
+    /// HUD is the transparent overlay that opens by default on .fw place (no cursor
+    /// grab). Modal is the draggable / scrollable / copyable dialog. Hidden leaves
+    /// nothing on screen.
+    /// </summary>
+    private void CycleChecklistView()
     {
-        if (capi == null || activeChecklistDialog == null)
+        if (capi == null || activeChecklistHud == null || activeChecklistDialog == null)
         {
             capi?.ShowChatMessage("[Fieldwright] No active checklist, place a ghost first.");
             return;
         }
 
-        if (activeChecklistDialog.IsOpened())
+        // Advance to the next state.
+        checklistView = (ChecklistView)(((int)checklistView + 1) % 3);
+
+        // Close anything that shouldn't be showing, then open what should. Order matters
+        // so that flipping HUD -> Modal doesn't briefly show both, which causes the modal
+        // to grab the cursor while the HUD's render layer is still active.
+        switch (checklistView)
         {
-            activeChecklistDialog.TryClose();
-        }
-        else
-        {
-            activeChecklistDialog.TryOpen();
+            case ChecklistView.Hud:
+                if (activeChecklistDialog.IsOpened()) activeChecklistDialog.TryClose();
+                if (!activeChecklistHud.IsOpened()) activeChecklistHud.TryOpen();
+                break;
+            case ChecklistView.Modal:
+                if (activeChecklistHud.IsOpened()) activeChecklistHud.TryClose();
+                if (!activeChecklistDialog.IsOpened()) activeChecklistDialog.TryOpen();
+                break;
+            case ChecklistView.Hidden:
+                if (activeChecklistHud.IsOpened()) activeChecklistHud.TryClose();
+                if (activeChecklistDialog.IsOpened()) activeChecklistDialog.TryClose();
+                break;
         }
     }
 
