@@ -57,6 +57,11 @@ public class BlueprintFile
             throw new System.InvalidOperationException($"Failed to load schematic: {error}");
         }
 
+        // Backfill any collections left null by JSON deserialization. Older v0.1.2
+        // saves omitted these fields entirely, and BlockSchematic.Remap inside Init()
+        // walks them without null-checks and NREs.
+        BlueprintStore.EnsureSchematicCollectionsInitialized(schematic);
+
         return schematic;
     }
 

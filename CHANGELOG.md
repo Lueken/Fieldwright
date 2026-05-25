@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. Format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3] - 2026-05-25
+
+The "ghost shows the real thing" release. Chests, crates, baskets, generic containers, and chiseled blocks now render with their actual block-entity geometry instead of mystery placeholders. The build checklist gets a movable, scrollable, copyable dialog mode in addition to the existing always-on HUD.
+
+### Added
+- **BE-aware ghost rendering.** New per-family mesh sources (`BEMeshSources.cs`) read each cell's saved block-entity tree at paste time and reconstruct the real mesh:
+  - **Chests / labeled chests / querns / beds**: tessellated normally + rotated by their saved `meshAngle`, so askew chests show askew in the ghost.
+  - **Crates / stationary baskets / generic containers**: a throwaway BlockEntity is spun up from the schematic's BE tree and its private mesh-builder (`GenMesh(tesselator)` or `loadOrCreateMesh()`) is invoked via reflection to extract the geometry. No more empty placeholders for BE-driven mesh families. MethodInfo lookups are cached per BE type.
+  - **Chiseled blocks / microblocks**: render the substrate the chisel was carved from (oak plank, granite, etc.) as a full cube. Voxel-level chisel detail still deferred to v0.2's chisel phase.
+- **Substrate-aware materials list.** Chiseled cells contribute to their substrate's row in the build checklist (`planks: 0/12` includes chiseled-from-plank cells) rather than showing as a separate `chiseledblock` line. Placing the substrate counts the cell as matched. Voxel-comparison matching is the v0.2 chisel phase.
+- **Movable / scrollable / copyable checklist dialog.** Ctrl+Shift+L now cycles three view states: HUD (transparent, always-on, no cursor grab) → Modal (draggable title bar, clipped scroll body, "Copy to clipboard" button) → Hidden → HUD. The HUD opens automatically on `.fw place`; the modal is opt-in via the cycle.
+
+### Fixed
+- **Paste no longer crashes with `NullReferenceException` on blueprints saved by v0.1.2's block-only fallback path.** Reported by Fish and 3CHØ on Discord. `BlockSchematic.LoadFromString` leaves `Entities` / `BlockEntities` / `ItemCodes` / `DecorIds` collections as null when the serialized JSON omitted them (which v0.1.2's `CaptureBlocksOnly` did), and `BlockSchematic.Init -> Remap` then iterates them without null-checks. `BlueprintFile.ToBlockSchematic` now calls `EnsureSchematicCollectionsInitialized` immediately after `LoadFromString` so the collections are always present before `Init` runs. Affects loads from single-player into a server, library paste, and the `.fw paste` chat command alike.
+
+### Notes
+- Crate / basket meshes don't have the in-world label / contents detail since we don't reconstruct items inside containers; mesh geometry + rotation only.
+- Reflection-based BE instantiation is best-effort. If a third-party mod's BE class throws inside Initialize without populating its mesh field, that cell falls back to bare tessellation (and likely an empty mesh). Warnings go to client-main.log under `[fieldwright:be-mesh]`.
+- Phase 1 build counts treat chiseled cells as their substrate. Players who care about chisel detail today should keep an eye on the source structure; the build-vs-chisel separation lands with v0.2.
+
+[0.1.3]: https://github.com/Lueken/Fieldwright/releases/tag/v0.1.3
+
 ## [0.1.2] - 2026-05-23
 
 Hotfix for a save crash reported by multiple users on the ModDB page (SimonBBallin, Sir_Capon).

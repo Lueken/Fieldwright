@@ -135,6 +135,16 @@ public class GhostMatchTracker : IDisposable
                 continue;
             }
 
+            // Phase-1 substrate substitution: chiseled cells count as their underlying
+            // material (oak plank, granite, ...) so placing the base block satisfies the
+            // cell. Voxel-detail matching is the chisel phase (v0.2).
+            if (IsChiselBlock(code) && schematic.BlockEntities.TryGetValue(encoded, out var ascii85))
+            {
+                var tree = BEUtil.DecodeBETree(capi, ascii85);
+                var substrate = BEUtil.TryGetChiselSubstrate(capi, tree);
+                if (substrate?.Code != null) code = substrate.Code;
+            }
+
             var groupKey = GroupKey(code);
             var displayLabel = DisplayLabel(code);
             expected[world] = groupKey;
@@ -173,6 +183,14 @@ public class GhostMatchTracker : IDisposable
     {
         var path = code?.Path;
         return path != null && path.StartsWith("multiblock", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsChiselBlock(AssetLocation? code)
+    {
+        var path = code?.Path;
+        if (path == null) return false;
+        return path.StartsWith("chiseledblock", System.StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("microblock", System.StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
