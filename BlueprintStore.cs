@@ -123,6 +123,20 @@ public static class BlueprintStore
     /// </summary>
     public static void EnsureSchematicCollectionsInitialized(BlockSchematic schematic)
     {
+        // BlockSchematic.BlockRemaps and ItemRemaps are public static auto-properties on
+        // the type itself, populated by the game from config at world load. On a remote-
+        // server-connected client they're never set, and BlockSchematic.Remap iterates
+        // them at BlockSchematic.cs line 186 / 201 without a null check — this is why
+        // paste worked in solo (integrated server populated them) but NRE'd on real
+        // servers in v0.1.4. Initialize both to empty dictionaries if null, which is a
+        // safe no-op when they're already populated.
+        BlockSchematic.BlockRemaps ??= new Dictionary<string, Dictionary<string, string>>();
+        BlockSchematic.ItemRemaps ??= new Dictionary<string, Dictionary<string, string>>();
+
+        // Then null-coalesce every instance collection field on the schematic too.
+        // v0.1.0-era blueprint JSON omits some of these and BlockSchematic.Remap walks
+        // them without null checks. Reflection means future BlockSchematic fields are
+        // covered without another patch.
         var type = typeof(BlockSchematic);
         foreach (var field in type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
         {
