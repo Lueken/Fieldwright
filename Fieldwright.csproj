@@ -5,6 +5,17 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin\$(Configuration)\Mods</OutputPath>
     <Nullable>enable</Nullable>
+    <!--
+      Rewrite the developer's absolute source paths to a generic prefix in PDB symbol
+      info. Stack traces shipped to end users still resolve line numbers (good for bug
+      reports) but no longer leak the build machine's folder structure. Without this,
+      a stack frame like "FieldwrightModSystem.DoPaste" formats as
+      "C:\Users\<devname>\Desktop\GitHub\vs-workshop\mods\fieldwright\..." in the
+      client log, which spooks users into thinking the mod is reaching across the
+      network. After PathMap, the same frame shows as "./FieldwrightModSystem.cs".
+    -->
+    <PathMap>$(MSBuildProjectDirectory)=./</PathMap>
+    <DeterministicSourcePaths>false</DeterministicSourcePaths>
   </PropertyGroup>
 
   <ItemGroup>
