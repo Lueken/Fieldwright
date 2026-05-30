@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. Format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3a] - 2026-05-29
+
+Hotfix for the residual load NRE Fish reported on Discord after v0.1.3 shipped.
+
+### Fixed
+- **Paste no longer NREs in `BlockSchematic.Remap` line 186 for older blueprints with missing collection fields.** The v0.1.3 patch null-coalesced six BlockSchematic collections (`Entities`, `BlockEntities`, `ItemCodes`, `DecorIds`, `EntitiesUnpacked`, `BlockEntitiesUnpacked`), but missed eight others (`DecorIndices`, `BlocksUnpacked`, `FluidsLayerUnpacked`, `DecorsUnpacked`, `Connectors`, `PathwaySides`, `PathwayStarts`, `PathwayOffsets`, `UndergroundCheckPositions`, `AbovegroundCheckPositions`). v0.1.0-era blueprint JSON omits several of these, leaving them null on load. `EnsureSchematicCollectionsInitialized` now uses reflection to walk every public collection-typed field on `BlockSchematic` and null-coalesces all of them, so any present or future field is covered automatically.
+
+### Changed
+- **Stack traces no longer leak the build machine's source paths.** Added `<PathMap>` to the csproj so absolute developer paths in PDB symbols get rewritten to `./` at compile time. End users still get file names and line numbers in crash reports, but the embedded path is now `./FieldwrightModSystem.cs` instead of the developer's local folder layout. Triggered after Fish read `C:\Users\<devname>\...` in her stack trace and reasonably wondered whether the mod was reaching across the network.
+
+[0.1.3a]: https://github.com/Lueken/Fieldwright/releases/tag/v0.1.3a
+
 ## [0.1.3] - 2026-05-25
 
 The "ghost shows the real thing" release. Chests, crates, baskets, generic containers, and chiseled blocks now render with their actual block-entity geometry instead of mystery placeholders. The build checklist gets a movable, scrollable, copyable dialog mode in addition to the existing always-on HUD.
