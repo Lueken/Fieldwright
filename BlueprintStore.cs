@@ -104,20 +104,53 @@ public static class BlueprintStore
     }
 
     /// <summary>
-    /// Defensive init for every collection field on BlockSchematic that the vanilla
-    /// AddArea path populates. Without these set to empty (rather than null), the
-    /// schematic JSON round-trip can leave fields null on the loaded copy, and
-    /// BlockSchematic.Remap() inside Init() walks them without null checks and NREs.
-    /// Reported by Fish, 3CHO, and PhallicYam after v0.1.2 shipped.
+    /// Defensive init for every collection field on BlockSchematic. The JSON round-trip
+    /// for a v0.1.0-era schematic (or any blueprint saved before BlockSchematic added a
+    /// given field) leaves those fields null on the loaded copy, and BlockSchematic.Remap
+    /// inside Init walks them without null checks and NREs.
+    ///
+    /// Earlier versions hand-typed the null-coalesces for the six fields we knew of,
+    /// which missed `DecorIndices`, `BlocksUnpacked`, `FluidsLayerUnpacked`,
+    /// `DecorsUnpacked`, `Connectors`, and the five `Pathway*` / `*CheckPositions`
+    /// arrays. Fish hit one of those after v0.1.3 shipped (paste still NRE'd in Remap
+    /// at line 186). Switched to reflection so every present-and-future collection
+    /// field is covered: any public instance field whose type is `List&lt;T&gt;`,
+    /// `Dictionary&lt;K,V&gt;`, `HashSet&lt;T&gt;`, or a single-dimensional array, if
+    /// null, gets assigned an empty default of the right type. Future BlockSchematic
+    /// additions are covered automatically.
+    ///
+    /// Reported by Fish, 3CHO, and PhallicYam.
     /// </summary>
     public static void EnsureSchematicCollectionsInitialized(BlockSchematic schematic)
     {
-        schematic.Entities ??= new List<string>();
-        schematic.BlockEntities ??= new Dictionary<uint, string>();
-        schematic.ItemCodes ??= new Dictionary<int, AssetLocation>();
-        schematic.DecorIds ??= new List<long>();
-        schematic.EntitiesUnpacked ??= new List<Vintagestory.API.Common.Entities.Entity>();
-        schematic.BlockEntitiesUnpacked ??= new Dictionary<BlockPos, string>();
+        var type = typeof(BlockSchematic);
+        foreach (var field in type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            if (field.GetValue(schematic) != null) continue;
+
+            var ft = field.FieldType;
+            object? empty = null;
+
+            if (ft.IsArray)
+            {
+                // Empty single-dim array of the element type. Jagged arrays (T[][])
+                // count as arrays of arrays, so this also covers PathwayOffsets.
+                var elem = ft.GetElementType();
+                if (elem != null) empty = System.Array.CreateInstance(elem, 0);
+            }
+            else if (ft.IsGenericType)
+            {
+                var def = ft.GetGenericTypeDefinition();
+                if (def == typeof(List<>)
+                    || def == typeof(Dictionary<,>)
+                    || def == typeof(HashSet<>))
+                {
+                    empty = System.Activator.CreateInstance(ft);
+                }
+            }
+
+            if (empty != null) field.SetValue(schematic, empty);
+        }
     }
 
     public static string GetBlueprintsDirectory(ICoreAPI api)
