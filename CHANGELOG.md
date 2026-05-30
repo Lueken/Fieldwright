@@ -2,12 +2,20 @@
 
 All notable changes to this project will be documented in this file. Format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.1.4] - 2026-05-29
+## [0.1.5] - 2026-05-29
 
-Hotfix for the residual load NRE Fish reported on Discord after v0.1.3 shipped. Originally tagged v0.1.3a; renamed to v0.1.4 because ModDB's modinfo parser rejects letter-suffixed semver strings.
+Follow-up to v0.1.4 covering a remote-server-only case that solo testing missed. v0.1.4 was briefly published to ModDB and then retracted when paste failed on real multiplayer servers despite working fine in solo. v0.1.5 ships the same v0.1.4 surface area plus the remote-server fix.
 
 ### Fixed
-- **Paste no longer NREs on real multiplayer servers (works in solo, fails on remote).** `BlockSchematic.Remap` iterates `BlockSchematic.BlockRemaps` and `ItemRemaps` at lines 186 / 201 — both static auto-properties the game populates from world config. On a remote-server-connected client these are never set, so the foreach NRE'd while solo (with the integrated server populating them) succeeded. `EnsureSchematicCollectionsInitialized` now null-coalesces both static dictionaries to empty before the schematic gets `Init`ed.
+- **Paste no longer NREs on real multiplayer servers.** `BlockSchematic.Remap` iterates `BlockSchematic.BlockRemaps` and `ItemRemaps` at lines 186 / 201 — both public static auto-properties the game populates from world config. On a remote-server-connected client neither is ever set, so the foreach NRE'd; solo worked because the integrated server populated them. `EnsureSchematicCollectionsInitialized` now null-coalesces both static dictionaries to empty before the schematic gets `Init`ed. Confirmed by reading the open-source `vsapi` `BlockSchematic.cs`.
+
+[0.1.5]: https://github.com/Lueken/Fieldwright/releases/tag/v0.1.5
+
+## [0.1.4] - 2026-05-29
+
+Hotfix for the residual load NRE Fish reported on Discord after v0.1.3 shipped. Originally tagged v0.1.3a; renamed to v0.1.4 because ModDB's modinfo parser rejects letter-suffixed semver strings. Briefly uploaded to ModDB before paste failures on real multiplayer servers were spotted; superseded by v0.1.5 within hours.
+
+### Fixed
 - **Paste no longer NREs in `BlockSchematic.Remap` line 186 for older blueprints with missing collection fields.** The v0.1.3 patch null-coalesced six BlockSchematic collections (`Entities`, `BlockEntities`, `ItemCodes`, `DecorIds`, `EntitiesUnpacked`, `BlockEntitiesUnpacked`), but missed eight others (`DecorIndices`, `BlocksUnpacked`, `FluidsLayerUnpacked`, `DecorsUnpacked`, `Connectors`, `PathwaySides`, `PathwayStarts`, `PathwayOffsets`, `UndergroundCheckPositions`, `AbovegroundCheckPositions`). v0.1.0-era blueprint JSON omits several of these, leaving them null on load. `EnsureSchematicCollectionsInitialized` now uses reflection to walk every public collection-typed field on `BlockSchematic` and null-coalesces all of them, so any present or future field is covered automatically.
 
 ### Changed
